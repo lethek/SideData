@@ -11,7 +11,16 @@ public readonly struct SideData<TK> where TK : class
 
 
     public void Set<T>(T value)
+#if NETSTANDARD2_1_OR_GREATER || NETCOREAPP2_0_OR_GREATER
         => AttachedData<T>.Table.AddOrUpdate(_hostObject, new(value));
+#else
+    {
+      lock (AttachedData<T>.Table) {
+          AttachedData<T>.Table.Remove(_hostObject);
+          AttachedData<T>.Table.Add(_hostObject, new(value));
+      }
+    }
+#endif
 
 
     public void Add<T>(T value)
@@ -19,7 +28,18 @@ public readonly struct SideData<TK> where TK : class
 
 
     public bool TryAdd<T>(T value)
+#if NET7_0_OR_GREATER
         => AttachedData<T>.Table.TryAdd(_hostObject, new(value));
+#else
+    {
+        try {
+            AttachedData<T>.Table.Add(_hostObject, new(value));
+            return true;
+        } catch (ArgumentException) {
+            return false;
+        }
+    }
+#endif
 
 
     public void Remove<T>()
@@ -43,7 +63,11 @@ public readonly struct SideData<TK> where TK : class
             : defaultValue;
 
 
-    public bool TryGet<T>([MaybeNullWhen(false)] out T value)
+    public bool TryGet<T>(
+#if NETSTANDARD2_1_OR_GREATER || NETCOREAPP3_0_OR_GREATER
+        [MaybeNullWhen(false)]
+#endif
+        out T value)
     {
         if (AttachedData<T>.Table.TryGetValue(_hostObject, out var box)) {
             value = box.Value;
@@ -63,7 +87,7 @@ public readonly struct SideData<TK> where TK : class
         public readonly T Value = Value;
     }
 
-
+   
     private static class AttachedData<T>
     {
         internal static readonly ConditionalWeakTable<TK, RecordBox<T>> Table = new();
