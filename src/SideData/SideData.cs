@@ -73,7 +73,7 @@ public readonly struct SideData<TK> where TK : class
             value = box.Value;
             return true;
         } else {
-            value = default(T);
+            value = default(T)!;
             return false;
         }
     }

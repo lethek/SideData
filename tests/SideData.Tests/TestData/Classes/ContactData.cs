@@ -2,5 +2,6 @@
 
 internal class ContactData
 {
-    public AddressClass AddressClass { get; set; }
+    public AddressClass? AddressClass { get; set; }
 }
+

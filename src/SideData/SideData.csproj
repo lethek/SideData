@@ -35,4 +35,11 @@
     </PackageReference>
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="..\..\README.md">
+      <Pack>True</Pack>
+      <PackagePath>\README.md</PackagePath>
+    </None>
+  </ItemGroup>
+
 </Project>

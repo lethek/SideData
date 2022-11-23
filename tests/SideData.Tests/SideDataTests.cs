@@ -63,6 +63,6 @@ public class SideDataTests
 
     private sealed class User
     {
-        public string Username { get; set; }
+        public string? Username { get; set; }
     }
 }
