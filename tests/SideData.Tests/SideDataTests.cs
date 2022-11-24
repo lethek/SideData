@@ -1,68 +1,67 @@
-using System.Runtime.ExceptionServices;
-using SideData.TestData.Classes;
-using SideData.TestData.Structs;
+using SideData.Fixtures;
+using SideData.TestData;
 
 namespace SideData;
 
-public class SideDataTests
+public class SideDataTests : IClassFixture<TestDataFixture>
 {
+    public SideDataTests(TestDataFixture testDataFixture)
+        => Fixture = testDataFixture;
+
+
     [Fact]
-    public void Get_ClassSideData_ReturnsSameObjectsThatWereSet()
+    public void Get_ClassSideData_ReturnsSameObjectsWhichWereSet()
     {
-        var user = new User { Username = "User1" };
-        var setPersonalData = new TestData.Classes.PersonalData { Name = "Michael", Age = 100 };
-        var setContactData = new TestData.Classes.ContactData { AddressClass = new() { State = "NSW", Country = "Australia" } };
+        var user = Fixture.UserFaker.Generate();
+        var expectedPersonalData = Fixture.PersonalDataFaker.Generate();
+        var expectedContactData = Fixture.ContactDataFaker.Generate();
 
-        user.SideData().Set(setPersonalData);
-        user.SideData().Set(setContactData);
+        user.SideData().Set(expectedPersonalData);
+        user.SideData().Set(expectedContactData);
 
-        var gotPersonalData = user.SideData().Get<TestData.Classes.PersonalData>();
-        var gotContactData = user.SideData().Get<TestData.Classes.ContactData>();
+        var actualPersonalData = user.SideData().Get<PersonalData>();
+        var actualContactData = user.SideData().Get<ContactData>();
 
         //Verify the returned objects are the exact same instances that were originally set
-        Assert.Same(setPersonalData, gotPersonalData);
-        Assert.Same(setContactData, gotContactData);
-    }
-
-
-    [Fact]
-    public void Get_StructSideData_ReturnsEqualStructsThatWereSet()
-    {
-        var user = new User { Username = "User1" };
-        var setPersonalData = new TestData.Structs.PersonalData { Name = "Michael", Age = 100 };
-        var setContactData = new TestData.Structs.ContactData { Address = new() { State = "NSW", Country = "Australia" } };
-
-        user.SideData().Set(setPersonalData);
-        user.SideData().Set(setContactData);
-
-        var gotPersonalData = user.SideData().Get<TestData.Structs.PersonalData>();
-        var gotContactData = user.SideData().Get<TestData.Structs.ContactData>();
-
-        //Verify the returns structs are equal to the structs that were originally set; they won't be the same instances because structs are pass-by-copy
-        Assert.Equal(setPersonalData, gotPersonalData);
-        Assert.Equal(setContactData, gotContactData);
+        Assert.Same(expectedPersonalData, actualPersonalData);
+        Assert.Same(expectedContactData, actualContactData);
     }
 
 
     [Fact]
     public void Set_SideData_ReplacesPreviousMatchingSideDataType()
     {
-        var user = new User { Username = "User1" };
-        var first = new TestData.Classes.PersonalData();
-        var second = new TestData.Classes.PersonalData();
+        var user = Fixture.UserFaker.Generate();
+        var expected = Fixture.PersonalDataFaker.Generate();
+        var unexpected = Fixture.PersonalDataFaker.Generate();
 
-        user.SideData().Set(first);
-        user.SideData().Set(second);
+        user.SideData().Set(unexpected);
+        user.SideData().Set(expected);
 
-        var retrieved = user.SideData().Get<TestData.Classes.PersonalData>();
-
-        //Verify the returned object is the exact same instance as the last of its type that was set
-        Assert.Same(second, retrieved);
+        //Verify the returned object is the exact same instance as the latest of its type which was set; the former were replaced
+        var actual = user.SideData().Get<PersonalData>();
+        Assert.NotSame(unexpected, actual);
+        Assert.Same(expected, actual);
     }
 
 
-    private sealed class User
+    [Fact]
+    public void GetOrAdd_SideData_GetsExistingDataOrIfMissingAddsAndGetsNewData()
     {
-        public string? Username { get; set; }
+        var user = Fixture.UserFaker.Generate();
+        var expected = Fixture.PersonalDataFaker.Generate();
+        var unexpected = Fixture.PersonalDataFaker.Generate();
+
+        //1st call to GetOrAdd attaches 'expected' to the object because there was nothing of the type already there
+        var firstResult = user.SideData().GetOrAdd(x => expected);
+        Assert.Same(expected, firstResult);
+
+        //2nd call to GetOrAdd ignores 'unexpected' and returns 'expected' instead because 'expected' is already attached
+        var secondResult = user.SideData().GetOrAdd(x => unexpected);
+        Assert.NotSame(unexpected, secondResult);
+        Assert.Same(expected, secondResult);
     }
+
+
+    private TestDataFixture Fixture { get; }
 }

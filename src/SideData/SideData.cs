@@ -63,6 +63,19 @@ public readonly struct SideData<TK> where TK : class
             : defaultValue;
 
 
+    /// <summary>
+    /// Returns the specified data. If it does not exist, the method invokes the <paramref name="newValue"/> callback to
+    /// create data that is bound to the object.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="newValue"></param>
+    /// <returns></returns>
+    public T GetOrAdd<T>(Func<TK,T> newValue)
+        => AttachedData<T>.Table
+            .GetValue(_hostObject, tk => new(newValue(tk)))
+            .Value;
+
+
     public bool TryGet<T>(
 #if NETSTANDARD2_1_OR_GREATER || NETCOREAPP3_0_OR_GREATER
         [MaybeNullWhen(false)]
