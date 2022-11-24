@@ -1,4 +1,5 @@
 using SideData.Fixtures;
+using SideData.LowLevel;
 using SideData.TestData;
 
 namespace SideData;
@@ -16,11 +17,11 @@ public class SideDataTests : IClassFixture<TestDataFixture>
         var expectedPersonalData = Fixture.PersonalDataFaker.Generate();
         var expectedContactData = Fixture.ContactDataFaker.Generate();
 
-        user.SideData().Set(expectedPersonalData);
-        user.SideData().Set(expectedContactData);
+        user.TypedSideData().Set(expectedPersonalData);
+        user.TypedSideData().Set(expectedContactData);
 
-        var actualPersonalData = user.SideData().Get<PersonalData>();
-        var actualContactData = user.SideData().Get<ContactData>();
+        var actualPersonalData = user.TypedSideData().Get<PersonalData>();
+        var actualContactData = user.TypedSideData().Get<ContactData>();
 
         //Verify the returned objects are the exact same instances that were originally set
         Assert.Same(expectedPersonalData, actualPersonalData);
@@ -35,11 +36,11 @@ public class SideDataTests : IClassFixture<TestDataFixture>
         var expected = Fixture.PersonalDataFaker.Generate();
         var unexpected = Fixture.PersonalDataFaker.Generate();
 
-        user.SideData().Set(unexpected);
-        user.SideData().Set(expected);
+        user.TypedSideData().Set(unexpected);
+        user.TypedSideData().Set(expected);
 
         //Verify the returned object is the exact same instance as the latest of its type which was set; the former were replaced
-        var actual = user.SideData().Get<PersonalData>();
+        var actual = user.TypedSideData().Get<PersonalData>();
         Assert.NotSame(unexpected, actual);
         Assert.Same(expected, actual);
     }
@@ -53,11 +54,11 @@ public class SideDataTests : IClassFixture<TestDataFixture>
         var unexpected = Fixture.PersonalDataFaker.Generate();
 
         //1st call to GetOrAdd attaches 'expected' to the object because there was nothing of the type already there
-        var firstResult = user.SideData().GetOrAdd(x => expected);
+        var firstResult = user.TypedSideData().GetOrAdd(x => expected);
         Assert.Same(expected, firstResult);
 
         //2nd call to GetOrAdd ignores 'unexpected' and returns 'expected' instead because 'expected' is already attached
-        var secondResult = user.SideData().GetOrAdd(x => unexpected);
+        var secondResult = user.TypedSideData().GetOrAdd(x => unexpected);
         Assert.NotSame(unexpected, secondResult);
         Assert.Same(expected, secondResult);
     }

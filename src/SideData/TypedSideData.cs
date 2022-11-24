@@ -4,9 +4,9 @@ using System.Runtime.CompilerServices;
 
 namespace SideData;
 
-public readonly struct SideData<TK> where TK : class
+public readonly struct TypedSideData<TK> where TK : class
 {
-    internal SideData(TK obj)
+    internal TypedSideData(TK obj)
         => _hostObject = obj;
 
 
@@ -15,10 +15,10 @@ public readonly struct SideData<TK> where TK : class
         => AttachedData<T>.Table.AddOrUpdate(_hostObject, new(value));
 #else
     {
-      lock (AttachedData<T>.Table) {
-          AttachedData<T>.Table.Remove(_hostObject);
-          AttachedData<T>.Table.Add(_hostObject, new(value));
-      }
+        lock (AttachedData<T>.Table) {
+            AttachedData<T>.Table.Remove(_hostObject);
+            AttachedData<T>.Table.Add(_hostObject, new(value));
+        }
     }
 #endif
 
@@ -70,7 +70,7 @@ public readonly struct SideData<TK> where TK : class
     /// <typeparam name="T"></typeparam>
     /// <param name="newValue"></param>
     /// <returns></returns>
-    public T GetOrAdd<T>(Func<TK,T> newValue)
+    public T GetOrAdd<T>(Func<TK, T> newValue)
         => AttachedData<T>.Table
             .GetValue(_hostObject, tk => new(newValue(tk)))
             .Value;
@@ -100,7 +100,7 @@ public readonly struct SideData<TK> where TK : class
         public readonly T Value = Value;
     }
 
-   
+
     private static class AttachedData<T>
     {
         internal static readonly ConditionalWeakTable<TK, RecordBox<T>> Table = new();
