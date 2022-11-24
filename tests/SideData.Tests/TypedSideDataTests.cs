@@ -4,9 +4,9 @@ using SideData.TestData;
 
 namespace SideData;
 
-public class SideDataTests : IClassFixture<TestDataFixture>
+public class TypedSideDataTests : IClassFixture<TestDataFixture>
 {
-    public SideDataTests(TestDataFixture testDataFixture)
+    public TypedSideDataTests(TestDataFixture testDataFixture)
         => Fixture = testDataFixture;
 
 
