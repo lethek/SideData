@@ -2,9 +2,9 @@
 
 namespace SideData;
 
-public class DynamicDataTests : IClassFixture<TestDataFixture>
+public class SideDataTests : IClassFixture<TestDataFixture>
 {
-    public DynamicDataTests(TestDataFixture testDataFixture)
+    public SideDataTests(TestDataFixture testDataFixture)
         => Fixture = testDataFixture;
 
 
