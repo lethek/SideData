@@ -1,34 +1,34 @@
-﻿using System.Dynamic;
-
-using SideData.LowLevel;
-
-
-namespace SideData;
+﻿namespace SideData;
 
 public static class ObjectExtensions
 {
     /// <summary>
-    /// <para>One use-case for side-data is when writing an Extension Method for a 3rd-party class. If your extension method
-    /// needs to store some kind of "state" but the extended class doesn't have an appropriate &amp; accessible field/property
-    /// to store it in, you could attach your state data to the object as a dynamic field on <see cref="SideData{T}"/>.</para>
-    ///
-    /// <code>
-    /// var obj = new { Name = "Some unchangable object" };
-    /// obj.SideData().Shape = "Rectangle";
-    /// obj.SideData().NumberOfEdges = 4;
-    /// obj.SideData().EdgeLengths = new int[] { 6, 4, 6, 4 };
-    /// </code>
-    /// 
-    /// <para>When the object is collected by the GC, any attached side-data will also be collected as long as that data has no
-    /// other active references.</para>
-    /// 
-    /// <para>Warning: <see cref="SideData{T}"/> has no support for automatically disposing attached <see cref="IDisposable"/>
-    /// side-data, so exercise caution and make sure to either handle disposing those yourself, or avoid attaching them in the
-    /// first place.</para>
+    /// Retrieves a dynamic side-data container attached to the specified host object.
+    /// The returned value can be used to store or retrieve arbitrary properties at runtime.
     /// </summary>
-    /// <typeparam name="T"></typeparam>
-    /// <param name="obj">An object that has/will-have side-data attached to it.</param>
-    /// <returns>A dynamic <see cref="ExpandoObject"/> for storing side-data on <paramref name="obj"/>.</returns>
-    public static dynamic SideData<T>(this T obj) where T : class
-        => obj.TypedSideData().GetOrAdd(x => new ExpandoObject());
+    /// <typeparam name="T">The type of the host object that will receive the side data.</typeparam>
+    /// <param name="obj">The instance to which the side data will be attached.</param>
+    /// <param name="disposeOnReplace">
+    /// If <c>true</c>, any existing value that is replaced by a new assignment will be disposed when the replacement occurs,
+    /// ensuring that disposable side-data does not leak resources.
+    /// </param>
+    /// <returns>
+    /// A dynamic object representing the side-data bag associated with <paramref name="obj"/>.
+    /// The returned instance can be indexed or accessed via dynamic member syntax to store and retrieve arbitrary data.
+    /// If no side-data bag exists for <paramref name="obj"/>, a new one is created and stored automatically.
+    /// </returns>
+    public static dynamic SideData<T>(this T obj, bool disposeOnReplace = false) where T : class
+        => SideDataAttachment.GetOrAdd(obj, () => new SideDataBag(disposeOnReplace));
+
+
+    /// <summary>
+    /// Represents a dynamic bag that can be attached to any object via <see cref="ObjectExtensions.SideData{T}(T, bool)"/>.
+    /// The bag allows storage of arbitrary properties at runtime using dynamic member access or indexer syntax.
+    /// </summary>
+    /// <param name="disposeOnReplace">
+    /// If <c>true</c>, any existing value that is replaced by a new assignment will be disposed when the replacement occurs.
+    /// This ensures that disposable side-data does not leak resources.
+    /// </param>
+    public static SideDataBag SideDataBag<T>(this T obj, bool disposeOnReplace = false) where T : class
+        => SideDataAttachment.GetOrAdd(obj, () => new SideDataBag(disposeOnReplace));
 }
