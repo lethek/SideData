@@ -49,7 +49,7 @@ jobs:
       run: dotnet pack -c ${{ env.buildConfiguration }} -o "${{ github.workspace }}/artifacts/" -p:PackageVersion=${{ steps.gitversion.outputs.nuGetVersion }}
 
     - name: Upload
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: nuget
         path: |
