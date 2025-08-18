@@ -33,9 +33,8 @@ jobs:
       uses: actions/setup-dotnet@v2
       with:
         dotnet-version: |
-          3.1.x
-          6.x
-          7.x
+          8.x
+          9.x
 
     - name: Restore
       run: dotnet restore
@@ -57,15 +56,7 @@ jobs:
           ${{ github.workspace }}/artifacts/*.nupkg
           ${{ github.workspace }}/artifacts/*.snupkg
 
-    - name: Push (Pre-release)
-      if: ${{ steps.gitversion.outputs.nuGetPreReleaseTag != '' }}
-      uses: KnicKnic/os-specific-run@v1.0.4
-      with:
-        linux: dotnet nuget push "${{ github.workspace }}/artifacts/*.nupkg" -s ${{ secrets.MYGET_SOURCE }} -k ${{ secrets.MYGET_API_KEY }} --skip-duplicate
-        windows: dotnet nuget push "${{ github.workspace }}\artifacts\*.nupkg" -s ${{ secrets.MYGET_SOURCE }} -k ${{ secrets.MYGET_API_KEY }} --skip-duplicate
-
     - name: Push (Release)
-      if: ${{ steps.gitversion.outputs.nuGetPreReleaseTag == '' }}
       uses: KnicKnic/os-specific-run@v1.0.4
       with:
         linux: dotnet nuget push "${{ github.workspace }}/artifacts/*.nupkg" -s ${{ secrets.NUGET_SOURCE }} -k ${{ secrets.NUGET_API_KEY }} --skip-duplicate
