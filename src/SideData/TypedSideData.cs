@@ -47,10 +47,11 @@ public readonly struct TypedSideData<TK> where TK : class
 
 
     /// <summary>
+    /// Gets the side-data of type <typeparamref name="T"/> attached to the host object.
     /// </summary>
-    /// <typeparam name="T"></typeparam>
-    /// <returns></returns>
-    /// <exception cref="KeyNotFoundException"></exception>
+    /// <typeparam name="T">The type of side-data to retrieve.</typeparam>
+    /// <returns>The side-data value of type <typeparamref name="T"/>.</returns>
+    /// <exception cref="KeyNotFoundException">Thrown when no side-data of type <typeparamref name="T"/> is attached to the host object.</exception>
     public T Get<T>()
         => AttachedData<T>.Table.TryGetValue(_hostObject, out var box)
             ? box.Value

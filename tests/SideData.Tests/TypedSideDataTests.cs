@@ -64,5 +64,97 @@ public class TypedSideDataTests : IClassFixture<TestDataFixture>
     }
 
 
+    [Fact]
+    public void Add_NewSideData_AddsSuccessfully()
+    {
+        var user = Fixture.UserFaker.Generate();
+        var personalData = Fixture.PersonalDataFaker.Generate();
+
+        user.TypedSideData().Add(personalData);
+
+        var retrieved = user.TypedSideData().Get<PersonalData>();
+        Assert.Same(personalData, retrieved);
+    }
+
+
+    [Fact]
+    public void TryAdd_NewSideData_ReturnsTrueAndAdds()
+    {
+        var user = Fixture.UserFaker.Generate();
+        var personalData = Fixture.PersonalDataFaker.Generate();
+
+        var result = user.TypedSideData().TryAdd(personalData);
+
+        Assert.True(result);
+        var retrieved = user.TypedSideData().Get<PersonalData>();
+        Assert.Same(personalData, retrieved);
+    }
+
+
+    [Fact]
+    public void TryGet_ExistingSideData_ReturnsTrueAndValue()
+    {
+        var user = Fixture.UserFaker.Generate();
+        var expected = Fixture.PersonalDataFaker.Generate();
+        user.TypedSideData().Set(expected);
+
+        var success = user.TypedSideData().TryGet<PersonalData>(out var actual);
+
+        Assert.True(success);
+        Assert.Same(expected, actual);
+    }
+
+
+    [Fact]
+    public void Remove_ExistingSideData_RemovesSuccessfully()
+    {
+        var user = Fixture.UserFaker.Generate();
+        var personalData = Fixture.PersonalDataFaker.Generate();
+        user.TypedSideData().Set(personalData);
+
+        user.TypedSideData().Remove<PersonalData>();
+
+        var success = user.TypedSideData().TryGet<PersonalData>(out _);
+        Assert.False(success);
+    }
+
+
+    [Fact]
+    public void Set_MultipleDifferentTypes_AllStoredIndependently()
+    {
+        var user = Fixture.UserFaker.Generate();
+        var personalData = Fixture.PersonalDataFaker.Generate();
+        var contactData = Fixture.ContactDataFaker.Generate();
+        var stringData = "test-string";
+        var intData = 42;
+
+        user.TypedSideData().Set(personalData);
+        user.TypedSideData().Set(contactData);
+        user.TypedSideData().Set(stringData);
+        user.TypedSideData().Set(intData);
+
+        Assert.Same(personalData, user.TypedSideData().Get<PersonalData>());
+        Assert.Same(contactData, user.TypedSideData().Get<ContactData>());
+        Assert.Equal(stringData, user.TypedSideData().Get<string>());
+        Assert.Equal(intData, user.TypedSideData().Get<int>());
+    }
+
+
+    [Fact]
+    public void GetOrAdd_FactoryReceivesHostObject()
+    {
+        var user = Fixture.UserFaker.Generate();
+        User? capturedUser = null;
+
+        var result = user.TypedSideData().GetOrAdd(u => {
+            capturedUser = u;
+            return Fixture.PersonalDataFaker.Generate();
+        });
+
+        Assert.Same(user, capturedUser);
+        Assert.NotNull(result);
+    }
+
+
     private TestDataFixture Fixture { get; }
 }
