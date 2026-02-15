@@ -1,4 +1,5 @@
 ﻿using System.Dynamic;
+using System.Runtime.CompilerServices;
 
 using SideData.LowLevel;
 
@@ -29,6 +30,7 @@ public static class ObjectExtensions
     /// <typeparam name="T"></typeparam>
     /// <param name="obj">An object that has/will-have side-data attached to it.</param>
     /// <returns>A dynamic <see cref="ExpandoObject"/> for storing side-data on <paramref name="obj"/>.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static dynamic SideData<T>(this T obj) where T : class
         => obj.TypedSideData().GetOrAdd(x => new ExpandoObject());
 }

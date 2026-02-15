@@ -2,12 +2,8 @@
 
 namespace SideData;
 
-public class SideDataTests : IClassFixture<TestDataFixture>
+public class SideDataTests(TestDataFixture testDataFixture) : IClassFixture<TestDataFixture>
 {
-    public SideDataTests(TestDataFixture testDataFixture)
-        => Fixture = testDataFixture;
-
-
     [Fact]
     public void SideData_ForEachHostObject_IsUniquePerHostObject()
     {
@@ -120,5 +116,109 @@ public class SideDataTests : IClassFixture<TestDataFixture>
     }
 
 
-    private TestDataFixture Fixture { get; }
+    [Fact]
+    [Trait("Category", "EdgeCase")]
+    public void SideData_NonExistentProperty_ReturnsNull()
+    {
+        var user = Fixture.UserFaker.Generate();
+        dynamic sideData = user.SideData();
+
+        // Accessing non-existent dynamic property should return null (ExpandoObject behavior)
+        var expando = (IDictionary<string, object?>)sideData;
+        var hasProperty = expando.TryGetValue("NonExistent", out var value);
+
+        Assert.False(hasProperty);
+        Assert.Null(value);
+    }
+
+
+    [Fact]
+    [Trait("Category", "EdgeCase")]
+    public void SideData_SetNullProperty_StoresNull()
+    {
+        var user = Fixture.UserFaker.Generate();
+        dynamic sideData = user.SideData();
+
+        var expando = (IDictionary<string, object?>)sideData;
+        expando["NullProp"] = null;
+
+        Assert.True(expando.ContainsKey("NullProp"));
+        Assert.Null(expando["NullProp"]);
+    }
+
+
+    [Fact]
+    [Trait("Category", "Memory")]
+    public void SideData_WhenHostObjectCollected_ExpandoObjectIsCollectable()
+    {
+        WeakReference weakUser;
+        WeakReference weakExpandoObject;
+
+        void CreateAndAttachDynamicSideData()
+        {
+            var user = Fixture.UserFaker.Generate();
+            weakUser = new WeakReference(user);
+
+            dynamic sideData = user.SideData();
+            weakExpandoObject = new WeakReference(sideData);
+
+            sideData.Property1 = "value1";
+            sideData.Property2 = 42;
+
+            // Verify data is accessible
+            Assert.Equal("value1", sideData.Property1);
+        }
+
+        CreateAndAttachDynamicSideData();
+
+        // Force garbage collection
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        // Both should be collected
+        Assert.False(weakUser.IsAlive);
+        Assert.False(weakExpandoObject.IsAlive);
+    }
+
+
+    [Fact]
+    [Trait("Category", "Concurrency")]
+    public void SideData_ConcurrentPropertySets_DoesNotThrow()
+    {
+        var user = Fixture.UserFaker.Generate();
+        var threads = new Thread[10];
+        var exceptions = new List<Exception>();
+        var lockObj = new object();
+
+        for (int i = 0; i < threads.Length; i++) {
+            var threadId = i;
+            threads[i] = new Thread(() => {
+                try {
+                    dynamic sideData = user.SideData();
+                    // Each thread sets different properties
+                    var expando = (IDictionary<string, object?>)sideData;
+                    expando[$"Prop{threadId}"] = threadId;
+                } catch (Exception ex) {
+                    lock (lockObj) {
+                        exceptions.Add(ex);
+                    }
+                }
+            });
+        }
+
+        foreach (var thread in threads) {
+            thread.Start();
+        }
+
+        foreach (var thread in threads) {
+            thread.Join();
+        }
+
+        // Should not throw during concurrent access
+        Assert.Empty(exceptions);
+    }
+
+
+    private TestDataFixture Fixture { get; } = testDataFixture;
 }

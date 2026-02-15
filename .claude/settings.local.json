@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__serena__initial_instructions",
+      "mcp__serena__list_dir",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ]
+  }
+}

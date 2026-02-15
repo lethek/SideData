@@ -28,7 +28,7 @@ public readonly struct TypedSideData<TK> where TK : class
 
 
     public bool TryAdd<T>(T value)
-#if NET7_0_OR_GREATER
+#if NET8_0_OR_GREATER
         => AttachedData<T>.Table.TryAdd(_hostObject, new(value));
 #else
     {
