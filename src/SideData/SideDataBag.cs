@@ -3,8 +3,14 @@ using SideData.Internals;
 
 namespace SideData;
 
-public sealed class SideDataBag(bool disposeReplaced = false) : DynamicObject, IDisposable, IAsyncDisposable
+public sealed class SideDataBag(bool disposeOnReplace = false) : DynamicObject, IDisposable, IAsyncDisposable
 {
+    /// <summary>
+    /// Gets a value indicating whether replaced values are automatically disposed when overwritten.
+    /// </summary>
+    public bool DisposeOnReplace { get; } = disposeOnReplace;
+
+
     public override bool TryGetMember(GetMemberBinder binder, out object? result)
     {
         lock (_gate) {
@@ -20,7 +26,7 @@ public sealed class SideDataBag(bool disposeReplaced = false) : DynamicObject, I
             ThrowIfDisposed();
 
             if (_members.TryGetValue(binder.Name, out var old)) {
-                Untrack(old, dispose: disposeReplaced);
+                Untrack(old, dispose: DisposeOnReplace);
             }
 
             _members[binder.Name] = value;
@@ -30,6 +36,10 @@ public sealed class SideDataBag(bool disposeReplaced = false) : DynamicObject, I
     }
 
 
+    /// <summary>
+    /// Attempts to delete a member from the bag.
+    /// When a member is deleted, it uses the bag's <see cref="DisposeOnReplace"/> setting to determine whether to dispose the removed value.
+    /// </summary>
     public override bool TryDeleteMember(DeleteMemberBinder binder)
     {
         lock (_gate) {
@@ -37,7 +47,7 @@ public sealed class SideDataBag(bool disposeReplaced = false) : DynamicObject, I
 
             if (_members.TryGetValue(binder.Name, out var old)) {
                 _members.Remove(binder.Name);
-                Untrack(old, dispose: disposeReplaced);
+                Untrack(old, dispose: DisposeOnReplace);
                 return true;
             }
 
@@ -45,34 +55,35 @@ public sealed class SideDataBag(bool disposeReplaced = false) : DynamicObject, I
         }
     }
 
-    
+
     public override bool TryGetIndex(GetIndexBinder binder, object[] indexes, out object? result)
     {
-        //Support a single string key only
-        if (indexes is null || indexes.Length != 1 || indexes[0] is not string key) {
-            result = null;
-            return false;
-        }
-
         lock (_gate) {
             ThrowIfDisposed();
+
+            // Support a single string key only
+            if (indexes is null || indexes.Length != 1 || indexes[0] is not string key) {
+                result = null;
+                return false;
+            }
+
             return _members.TryGetValue(key, out result!);
         }
     }
 
-    
+
     public override bool TrySetIndex(SetIndexBinder binder, object[] indexes, object? value)
     {
-        //Support a single string key only
-        if (indexes is null || indexes.Length != 1 || indexes[0] is not string key) {
-            return false;
-        }
-
         lock (_gate) {
             ThrowIfDisposed();
 
+            // Support a single string key only
+            if (indexes is null || indexes.Length != 1 || indexes[0] is not string key) {
+                return false;
+            }
+
             if (_members.TryGetValue(key, out var old)) {
-                Untrack(old, dispose: disposeReplaced);
+                Untrack(old, dispose: DisposeOnReplace);
             }
 
             _members[key] = value;
@@ -85,12 +96,13 @@ public sealed class SideDataBag(bool disposeReplaced = false) : DynamicObject, I
     public override IEnumerable<string> GetDynamicMemberNames()
     {
         lock (_gate) {
+            ThrowIfDisposed();
             return _members.Keys.ToArray();
         }
     }
 
 
-    //Indexer for non-dynamic callers (optional)
+    // Indexer for non-dynamic callers (optional)
     public object? this[string name] {
         get {
             lock (_gate) {
@@ -102,7 +114,7 @@ public sealed class SideDataBag(bool disposeReplaced = false) : DynamicObject, I
             lock (_gate) {
                 ThrowIfDisposed();
                 if (_members.TryGetValue(name, out var old)) {
-                    Untrack(old, dispose: disposeReplaced);
+                    Untrack(old, dispose: DisposeOnReplace);
                 }
 
                 _members[name] = value;
@@ -210,7 +222,7 @@ public sealed class SideDataBag(bool disposeReplaced = false) : DynamicObject, I
                 return;
             }
 
-            //Untrack each current value, optionally disposing as requested
+            // Untrack each current value, optionally disposing as requested
             foreach (var value in _members.Values) {
                 Untrack(value, dispose: disposeMembers);
             }
@@ -249,12 +261,14 @@ public sealed class SideDataBag(bool disposeReplaced = false) : DynamicObject, I
             SafeDispose(d);
         }
 
-        //Synchronously dispose async disposables as a fallback
+        // Finalizer/synchronous path: must block on async disposal.
+        // If DisposeAsync() requires a SynchronizationContext, this may deadlock,
+        // but there is no alternative in a finalizer. The try/catch prevents crashes.
         foreach (var ad in toDisposeAsync) {
             try {
                 ad.DisposeAsync().AsTask().GetAwaiter().GetResult();
             } catch {
-                //Ignore exceptions in disposal
+                // Ignore exceptions in disposal
             }
         }
 
@@ -289,7 +303,7 @@ public sealed class SideDataBag(bool disposeReplaced = false) : DynamicObject, I
             try {
                 await ad.DisposeAsync().ConfigureAwait(false);
             } catch {
-                //Ignore exceptions in disposal
+                // Ignore exceptions in disposal
             }
         }
 
@@ -323,7 +337,7 @@ public sealed class SideDataBag(bool disposeReplaced = false) : DynamicObject, I
                 try {
                     ad.DisposeAsync().AsTask().GetAwaiter().GetResult();
                 } catch {
-                    //Ignore exceptions in disposal
+                    // Ignore exceptions in disposal
                 }
             }
         } else if (value is IDisposable d && _owned.Remove(d)) {
@@ -339,7 +353,7 @@ public sealed class SideDataBag(bool disposeReplaced = false) : DynamicObject, I
         try {
             d.Dispose();
         } catch {
-            //Ignore exceptions in disposal
+            // Ignore exceptions in disposal
         }
     }
 

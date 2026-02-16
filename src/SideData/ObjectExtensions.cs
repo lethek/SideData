@@ -17,8 +17,19 @@ public static class ObjectExtensions
     /// The returned instance can be indexed or accessed via dynamic member syntax to store and retrieve arbitrary data.
     /// If no side-data bag exists for <paramref name="obj"/>, a new one is created and stored automatically.
     /// </returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when a side-data bag already exists for <paramref name="obj"/> but with a different <paramref name="disposeOnReplace"/> setting.
+    /// </exception>
     public static dynamic SideData<T>(this T obj, bool disposeOnReplace = false) where T : class
-        => SideDataAttachment.GetOrAdd(obj, () => new SideDataBag(disposeOnReplace));
+    {
+        var bag = SideDataAttachment.GetOrAdd(obj, () => new SideDataBag(disposeOnReplace));
+        if (bag is SideDataBag sdBag && sdBag.DisposeOnReplace != disposeOnReplace) {
+            throw new InvalidOperationException(
+                $"A side-data bag already exists for this object with disposeOnReplace={sdBag.DisposeOnReplace}. " +
+                $"Cannot retrieve it with disposeOnReplace={disposeOnReplace}.");
+        }
+        return bag;
+    }
 
 
     /// <summary>
@@ -29,6 +40,17 @@ public static class ObjectExtensions
     /// If <c>true</c>, any existing value that is replaced by a new assignment will be disposed when the replacement occurs.
     /// This ensures that disposable side-data does not leak resources.
     /// </param>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when a side-data bag already exists for <paramref name="obj"/> but with a different <paramref name="disposeOnReplace"/> setting.
+    /// </exception>
     public static SideDataBag SideDataBag<T>(this T obj, bool disposeOnReplace = false) where T : class
-        => SideDataAttachment.GetOrAdd(obj, () => new SideDataBag(disposeOnReplace));
+    {
+        var bag = SideDataAttachment.GetOrAdd(obj, () => new SideDataBag(disposeOnReplace));
+        if (bag is SideDataBag sdBag && sdBag.DisposeOnReplace != disposeOnReplace) {
+            throw new InvalidOperationException(
+                $"A side-data bag already exists for this object with disposeOnReplace={sdBag.DisposeOnReplace}. " +
+                $"Cannot retrieve it with disposeOnReplace={disposeOnReplace}.");
+        }
+        return bag;
+    }
 }

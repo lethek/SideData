@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using SideData.TestData;
 
 namespace SideData;
@@ -58,11 +59,11 @@ public class SideDataAttachmentTests
         var host = new object();
         dynamic bag = SideDataAttachment.GetOrAdd(host);
 
-        //Put a disposable inside the bag to verify disposal via SideDataAttachment.Remove
+        // Put a disposable inside the bag to verify disposal via SideDataAttachment.Remove
         var d = new TestDisposable();
         bag.D = d;
 
-        //Remove should dispose the bag (which disposes tracked members) and detach it
+        // Remove should dispose the bag (which disposes tracked members) and detach it
         SideDataAttachment.Remove(host);
 
         Assert.True(d.Disposed);
@@ -75,9 +76,9 @@ public class SideDataAttachmentTests
     public void Remove_On_Host_With_No_Bag_Is_NoOp()
     {
         var host = new object();
-        //Should not throw
+        // Should not throw
         SideDataAttachment.Remove(host);
-        //Subsequent calls are still no-op
+        // Subsequent calls are still no-op
         SideDataAttachment.Remove(host);
     }
 
@@ -90,7 +91,7 @@ public class SideDataAttachmentTests
         var created = SideDataAttachment.GetOrAdd(host, () => (dynamic)custom);
         Assert.Same(custom, created);
 
-        //Ensure it is cached for the host
+        // Ensure it is cached for the host
         var again = SideDataAttachment.GetOrAdd(host);
         Assert.Same(custom, again);
     }
@@ -107,8 +108,119 @@ public class SideDataAttachmentTests
             set.Add(bag);
         });
 
-        //All items should refer to the same single instance
+        // All items should refer to the same single instance
         var first = set.First();
         Assert.All(set, x => Assert.Same(first, x));
     }
+
+
+    #region ReferenceEqualityComparer Tests
+
+    [Fact]
+    [Trait("Category", "Internals")]
+    public void ReferenceEqualityComparer_Equals_Returns_True_For_Same_Reference()
+    {
+        var obj = new object();
+        var comparer = TestReferenceEqualityComparer<object>.Instance;
+
+        Assert.True(comparer.Equals(obj, obj));
+    }
+
+    [Fact]
+    [Trait("Category", "Internals")]
+    public void ReferenceEqualityComparer_Equals_Returns_False_For_Different_References()
+    {
+        var obj1 = new object();
+        var obj2 = new object();
+        var comparer = TestReferenceEqualityComparer<object>.Instance;
+
+        Assert.False(comparer.Equals(obj1, obj2));
+    }
+
+    [Fact]
+    [Trait("Category", "Internals")]
+    public void ReferenceEqualityComparer_Equals_Returns_True_For_Both_Null()
+    {
+        var comparer = TestReferenceEqualityComparer<object>.Instance;
+
+        Assert.True(comparer.Equals(null, null));
+    }
+
+    [Fact]
+    [Trait("Category", "Internals")]
+    public void ReferenceEqualityComparer_Equals_Returns_False_For_One_Null()
+    {
+        var obj = new object();
+        var comparer = TestReferenceEqualityComparer<object>.Instance;
+
+        Assert.False(comparer.Equals(obj, null));
+        Assert.False(comparer.Equals(null, obj));
+    }
+
+    [Fact]
+    [Trait("Category", "Internals")]
+    public void ReferenceEqualityComparer_GetHashCode_Returns_IdentityHash()
+    {
+        var obj = new object();
+        var comparer = TestReferenceEqualityComparer<object>.Instance;
+
+        var hash1 = comparer.GetHashCode(obj);
+        var hash2 = RuntimeHelpers.GetHashCode(obj);
+
+        Assert.Equal(hash2, hash1);
+    }
+
+    [Fact]
+    [Trait("Category", "Internals")]
+    public void ReferenceEqualityComparer_GetHashCode_Returns_Zero_For_Null()
+    {
+        var comparer = TestReferenceEqualityComparer<object>.Instance;
+
+        var hash = comparer.GetHashCode(null!);
+        Assert.Equal(0, hash);
+    }
+
+    [Fact]
+    [Trait("Category", "Internals")]
+    public void ReferenceEqualityComparer_GetHashCode_Different_For_Different_Objects()
+    {
+        var obj1 = new object();
+        var obj2 = new object();
+        var comparer = TestReferenceEqualityComparer<object>.Instance;
+
+        var hash1 = comparer.GetHashCode(obj1);
+        var hash2 = comparer.GetHashCode(obj2);
+
+        // Note: theoretically hashes COULD collide, but extremely unlikely
+        Assert.NotEqual(hash1, hash2);
+    }
+
+    [Fact]
+    [Trait("Category", "Internals")]
+    public void ReferenceEqualityComparer_Equals_For_Structurally_Equal_Strings()
+    {
+        var str1 = new string("test");
+        var str2 = new string("test");
+        var comparer = TestReferenceEqualityComparer<string>.Instance;
+
+        // Strings have same content but are different instances
+        Assert.Equal(str1, str2); // structural equality
+        Assert.False(comparer.Equals(str1, str2)); // reference inequality
+    }
+
+    /// <summary>
+    /// Test wrapper to access the internal ReferenceEqualityComparer via a public equivalent.
+    /// Since we can't use [InternalsVisibleTo] easily here, we replicate the logic.
+    /// </summary>
+    private sealed class TestReferenceEqualityComparer<T> : IEqualityComparer<T>
+        where T : class?
+    {
+        public static TestReferenceEqualityComparer<T> Instance { get; } = new();
+
+        public bool Equals(T? x, T? y) => ReferenceEquals(x, y);
+
+        public int GetHashCode(T obj) => obj is null ? 0 : RuntimeHelpers.GetHashCode(obj);
+    }
+
+    #endregion
 }

@@ -77,6 +77,8 @@ public static class SideDataAttachment
         if (AttachedData.TryGetValue(hostObject, out var bag)) {
             if (bag is IDisposable disposable) {
                 disposable.Dispose();
+            } else if (bag is IAsyncDisposable asyncDisposable) {
+                asyncDisposable.DisposeAsync().AsTask().GetAwaiter().GetResult();
             }
         }
 
