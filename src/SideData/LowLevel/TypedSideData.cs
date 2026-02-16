@@ -1,8 +1,7 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
-
-namespace SideData;
+namespace SideData.LowLevel;
 
 public readonly struct TypedSideData<TK> where TK : class
 {
@@ -28,7 +27,7 @@ public readonly struct TypedSideData<TK> where TK : class
 
 
     public bool TryAdd<T>(T value)
-#if NET8_0_OR_GREATER
+#if NET7_0_OR_GREATER
         => AttachedData<T>.Table.TryAdd(_hostObject, new(value));
 #else
     {
@@ -44,6 +43,15 @@ public readonly struct TypedSideData<TK> where TK : class
 
     public void Remove<T>()
         => AttachedData<T>.Table.Remove(_hostObject);
+
+
+    /// <summary>
+    /// Checks whether side-data of type <typeparamref name="T"/> is attached to the host object.
+    /// </summary>
+    /// <typeparam name="T">The type of side-data to check for.</typeparam>
+    /// <returns><see langword="true"/> if side-data of type <typeparamref name="T"/> exists; otherwise, <see langword="false"/>.</returns>
+    public bool Has<T>()
+        => AttachedData<T>.Table.TryGetValue(_hostObject, out _);
 
 
     /// <summary>
@@ -74,6 +82,19 @@ public readonly struct TypedSideData<TK> where TK : class
     public T GetOrAdd<T>(Func<TK, T> newValue)
         => AttachedData<T>.Table
             .GetValue(_hostObject, tk => new(newValue(tk)))
+            .Value;
+
+
+    /// <summary>
+    /// Returns the specified data. If it does not exist, the method invokes the <paramref name="factory"/> callback to
+    /// create data that is bound to the object.
+    /// </summary>
+    /// <typeparam name="T">The type of side-data to retrieve or create.</typeparam>
+    /// <param name="factory">The factory function to create the side-data if it doesn't exist.</param>
+    /// <returns>The existing or newly created side-data value.</returns>
+    public T GetOrAdd<T>(Func<T> factory)
+        => AttachedData<T>.Table
+            .GetValue(_hostObject, _ => new(factory()))
             .Value;
 
 

@@ -1,8 +1,7 @@
 using SideData.Fixtures;
-using SideData.LowLevel;
 using SideData.TestData;
 
-namespace SideData;
+namespace SideData.LowLevel;
 
 public class TypedSideDataTests(TestDataFixture testDataFixture) : IClassFixture<TestDataFixture>
 {
@@ -729,6 +728,81 @@ public class TypedSideDataTests(TestDataFixture testDataFixture) : IClassFixture
         }
 
         Assert.Empty(exceptions);
+    }
+
+
+    [Fact]
+    public void Has_ExistingSideData_ReturnsTrue()
+    {
+        var user = Fixture.UserFaker.Generate();
+        var personalData = Fixture.PersonalDataFaker.Generate();
+
+        user.TypedSideData().Set(personalData);
+
+        Assert.True(user.TypedSideData().Has<PersonalData>());
+    }
+
+
+    [Fact]
+    public void Has_NonExistentSideData_ReturnsFalse()
+    {
+        var user = Fixture.UserFaker.Generate();
+
+        Assert.False(user.TypedSideData().Has<PersonalData>());
+    }
+
+
+    [Fact]
+    public void Has_AfterRemove_ReturnsFalse()
+    {
+        var user = Fixture.UserFaker.Generate();
+        user.TypedSideData().Set(Fixture.PersonalDataFaker.Generate());
+
+        user.TypedSideData().Remove<PersonalData>();
+
+        Assert.False(user.TypedSideData().Has<PersonalData>());
+    }
+
+
+    [Fact]
+    public void GetOrAdd_ParameterlessFactory_CreatesAndReturnsNewData()
+    {
+        var user = Fixture.UserFaker.Generate();
+
+        var result = user.TypedSideData().GetOrAdd(() => Fixture.PersonalDataFaker.Generate());
+
+        Assert.NotNull(result);
+        Assert.IsType<PersonalData>(result);
+    }
+
+
+    [Fact]
+    public void GetOrAdd_ParameterlessFactory_ReturnsExistingData()
+    {
+        var user = Fixture.UserFaker.Generate();
+        var expected = Fixture.PersonalDataFaker.Generate();
+        user.TypedSideData().Set(expected);
+
+        var callCount = 0;
+        var result = user.TypedSideData().GetOrAdd(() => {
+            callCount++;
+            return Fixture.PersonalDataFaker.Generate();
+        });
+
+        Assert.Same(expected, result);
+        Assert.Equal(0, callCount); // Factory should not be called
+    }
+
+
+    [Fact]
+    public void GetOrAdd_ParameterlessFactory_WithNullResult_StoresNull()
+    {
+        var user = Fixture.UserFaker.Generate();
+
+        var result = user.TypedSideData().GetOrAdd<string?>(() => null);
+
+        Assert.Null(result);
+        Assert.True(user.TypedSideData().Has<string?>());
     }
 
 
