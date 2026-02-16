@@ -7,13 +7,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 dotnet build                                    # Build entire solution
 dotnet test                                     # Run all tests
-dotnet test --filter "FullyQualifiedName~ClassName"  # Run tests in a specific class
-dotnet test --filter "DisplayName~TestName"     # Run a single test by name
+dotnet test --filter-class "FullyQualifiedName.ClassName"  # Run tests in a specific class
+dotnet test --filter-method "FullyQualifiedName.ClassName.TestName"     # Run a single test by name
 dotnet test -f net8.0                           # Run tests against a specific TFM
 dotnet pack -c Release                          # Create NuGet package
 ```
 
-Tests use **xunit** and target `net8.0` and `net10.0`. The library itself multi-targets `netstandard2.0`, `netstandard2.1`, and `net7.0`.
+Tests use **xUnit v3** (with **Microsoft.Testing.Platform v2**) and target `net8.0` and `net10.0`. The library itself multi-targets `netstandard2.0`, `netstandard2.1`, and `net7.0`.
 
 ## Architecture
 
@@ -29,7 +29,7 @@ SideData is a small library that attaches arbitrary data to any .NET reference-t
 
 - `ObjectExtensions.cs` — The `SideData<T>()` extension method (high-level dynamic API)
 - `LowLevel/ObjectExtensions.cs` — The `TypedSideData<T>()` extension method (low-level typed API)
-- `TypedSideData.cs` — The `TypedSideData<TK>` struct with all storage operations. Contains `#if` preprocessor directives for polyfilling APIs across target frameworks (e.g., `AddOrUpdate` on net7.0+ vs lock-based fallback on netstandard2.0)
+- `LowLevel/TypedSideData.cs` — The `TypedSideData<TK>` struct with all storage operations. Contains `#if` preprocessor directives for polyfilling APIs across target frameworks (e.g., `AddOrUpdate` on net7.0+ vs lock-based fallback on netstandard2.0)
 
 ### Key implementation details
 
