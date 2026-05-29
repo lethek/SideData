@@ -700,5 +700,272 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
     #endregion
 
 
+    #region GetOrAdd Tests
+
+    [Fact]
+    [Trait("Category", "TypedAccessors")]
+    public void GetOrAdd_Creates_And_Stores_When_Missing()
+    {
+        var host = new object();
+        var bag = host.SideDataBag();
+
+        var calls = 0;
+        var result = bag.GetOrAdd("key", () => { calls++; return 42; });
+
+        Assert.Equal(42, result);
+        Assert.Equal(1, calls);
+        Assert.True(bag.TryGet<int>("key", out var stored));
+        Assert.Equal(42, stored);
+    }
+
+    [Fact]
+    [Trait("Category", "TypedAccessors")]
+    public void GetOrAdd_Returns_Existing_Without_Invoking_Factory()
+    {
+        var host = new object();
+        var bag = host.SideDataBag();
+
+        bag["key"] = 7;
+
+        var calls = 0;
+        var result = bag.GetOrAdd("key", () => { calls++; return 99; });
+
+        Assert.Equal(7, result);
+        Assert.Equal(0, calls);
+    }
+
+    [Fact]
+    [Trait("Category", "TypedAccessors")]
+    public void GetOrAdd_Existing_WrongType_Throws_InvalidCast()
+    {
+        var host = new object();
+        var bag = host.SideDataBag();
+
+        bag["key"] = "a string";
+
+        Assert.Throws<InvalidCastException>(() => bag.GetOrAdd<int>("key", () => 1));
+    }
+
+    [Fact]
+    [Trait("Category", "TypedAccessors")]
+    public void GetOrAdd_Existing_Null_Returns_Default_For_RefType()
+    {
+        var host = new object();
+        var bag = host.SideDataBag();
+
+        bag["key"] = null;
+
+        var calls = 0;
+        var result = bag.GetOrAdd<object?>("key", () => { calls++; return new object(); });
+
+        Assert.Null(result);
+        Assert.Equal(0, calls);
+    }
+
+    [Fact]
+    [Trait("Category", "TypedAccessors")]
+    public void GetOrAdd_Null_Arguments_Throw()
+    {
+        var host = new object();
+        var bag = host.SideDataBag();
+
+        Assert.Throws<ArgumentNullException>(() => bag.GetOrAdd<int>(null!, () => 1));
+        Assert.Throws<ArgumentNullException>(() => bag.GetOrAdd<int>("key", null!));
+    }
+
+    [Fact]
+    [Trait("Category", "Disposal")]
+    public void GetOrAdd_Throws_After_Dispose()
+    {
+        var host = new object();
+        var bag = host.SideDataBag();
+        bag.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => bag.GetOrAdd("key", () => 1));
+    }
+
+    [Fact]
+    [Trait("Category", "Disposal")]
+    public void GetOrAdd_Disposes_Orphan_When_Losing_Race()
+    {
+        var host = new object();
+        var bag = host.SideDataBag();
+
+        // Simulate a lost race: factory inserts a competing value before returning.
+        var winner = new TestDisposable();
+        var loser = new TestDisposable();
+
+        var result = bag.GetOrAdd("key", () =>
+        {
+            // Another caller wins while the factory runs.
+            bag["key"] = winner;
+            return loser;
+        });
+
+        Assert.Same(winner, result);
+        Assert.False(winner.Disposed);
+        Assert.True(loser.Disposed);
+        Assert.Same(winner, bag["key"]);
+    }
+
+    [Fact]
+    [Trait("Category", "Disposal")]
+    public void GetOrAdd_Disposes_Orphan_When_Disposed_During_Factory()
+    {
+        var host = new object();
+        var bag = host.SideDataBag();
+
+        var orphan = new TestDisposable();
+
+        Assert.Throws<ObjectDisposedException>(() => bag.GetOrAdd("key", () =>
+        {
+            bag.Dispose();
+            return orphan;
+        }));
+
+        Assert.True(orphan.Disposed);
+    }
+
+    [Fact]
+    [Trait("Category", "ThreadSafety")]
+    public void GetOrAdd_Concurrent_Same_Key_Returns_Single_Winner()
+    {
+        var host = new object();
+        var bag = host.SideDataBag();
+
+        var created = new System.Collections.Concurrent.ConcurrentBag<int>();
+
+        var results = new int[100];
+        Parallel.For(0, 100, i =>
+        {
+            results[i] = bag.GetOrAdd("key", () =>
+            {
+                var v = Environment.CurrentManagedThreadId;
+                created.Add(v);
+                return v;
+            });
+        });
+
+        var winner = bag.GetOrDefault<int>("key");
+        Assert.All(results, r => Assert.Equal(winner, r));
+    }
+
+    [Fact]
+    [Trait("Category", "TypedAccessors")]
+    public void GetOrAdd_With_Lazy_Initializes_Exactly_Once()
+    {
+        var host = new object();
+        var bag = host.SideDataBag();
+
+        var factoryCalls = 0;
+        Lazy<int> MakeLazy() => new(() => { Interlocked.Increment(ref factoryCalls); return 5; }, LazyThreadSafetyMode.ExecutionAndPublication);
+
+        var values = new int[100];
+        Parallel.For(0, 100, i =>
+        {
+            var lazy = bag.GetOrAdd("key", MakeLazy);
+            values[i] = lazy.Value;
+        });
+
+        Assert.All(values, v => Assert.Equal(5, v));
+        Assert.Equal(1, factoryCalls);
+    }
+
+    [Fact]
+    [Trait("Category", "TypedAccessors")]
+    public void GetOrAdd_Eager_Stores_And_Returns_When_Missing()
+    {
+        var host = new object();
+        var bag = host.SideDataBag();
+
+        var result = bag.GetOrAdd("key", 42);
+
+        Assert.Equal(42, result);
+        Assert.True(bag.TryGet<int>("key", out var stored));
+        Assert.Equal(42, stored);
+    }
+
+    [Fact]
+    [Trait("Category", "TypedAccessors")]
+    public void GetOrAdd_Eager_Returns_Existing()
+    {
+        var host = new object();
+        var bag = host.SideDataBag();
+
+        bag["key"] = 7;
+
+        var result = bag.GetOrAdd("key", 99);
+
+        Assert.Equal(7, result);
+    }
+
+    [Fact]
+    [Trait("Category", "TypedAccessors")]
+    public void GetOrAdd_Eager_Existing_WrongType_Throws_InvalidCast()
+    {
+        var host = new object();
+        var bag = host.SideDataBag();
+
+        bag["key"] = "a string";
+
+        Assert.Throws<InvalidCastException>(() => bag.GetOrAdd("key", 1));
+    }
+
+    [Fact]
+    [Trait("Category", "TypedAccessors")]
+    public void GetOrAdd_Eager_Null_Name_Throws()
+    {
+        var host = new object();
+        var bag = host.SideDataBag();
+
+        Assert.Throws<ArgumentNullException>(() => bag.GetOrAdd(null!, 1));
+    }
+
+    [Fact]
+    [Trait("Category", "Disposal")]
+    public void GetOrAdd_Eager_Throws_After_Dispose()
+    {
+        var host = new object();
+        var bag = host.SideDataBag();
+        bag.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => bag.GetOrAdd("key", 1));
+    }
+
+    [Fact]
+    [Trait("Category", "Disposal")]
+    public void GetOrAdd_Eager_Does_Not_Dispose_Losing_Value()
+    {
+        var host = new object();
+        var bag = host.SideDataBag();
+
+        var winner = new TestDisposable();
+        var loser = new TestDisposable();
+        bag["key"] = winner;
+
+        var result = bag.GetOrAdd("key", loser);
+
+        Assert.Same(winner, result);
+        Assert.False(loser.Disposed);
+        Assert.False(winner.Disposed);
+    }
+
+    [Fact]
+    [Trait("Category", "Disposal")]
+    public void GetOrAdd_Eager_Tracks_Stored_Disposable()
+    {
+        var host = new object();
+        var bag = host.SideDataBag();
+
+        var disposable = new TestDisposable();
+        bag.GetOrAdd("key", disposable);
+
+        bag.Dispose();
+        Assert.True(disposable.Disposed);
+    }
+
+    #endregion
+
+
     private TestDataFixture Fixture { get; } = testDataFixture;
 }

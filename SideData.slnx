@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path="CLAUDE.md" />
+    <File Path="LICENSE" />
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/SideData/SideData.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SideData.Tests/SideData.Tests.csproj" />
+  </Folder>
+</Solution>

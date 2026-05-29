@@ -1,33 +1,36 @@
 # Test Coverage
 
 ## Test Suite Summary
-- **Total tests**: 61 unique tests (122 total executions across net10.0 and net8.0)
+- **Total tests**: 78 unique tests (156 total executions across net10.0 and net8.0)
 - **Test files**: 
   - `SideDataTests.cs` - Tests for dynamic API (`.SideData()`) - 13 tests
-  - `SideDataBagTests.cs` - Tests for SideDataBag class (`.SideDataBag()`) - 32 tests
+  - `SideDataBagTests.cs` - Tests for SideDataBag class (`.SideDataBag()`) - 49 tests
   - `SideDataAttachmentTests.cs` - Tests for SideDataAttachment class - 16 tests
 - **Test frameworks**: xUnit v3.2.2 with Microsoft Testing Platform v2
 
 ## Coverage Categories (using Trait attributes)
 
-### ThreadSafety (6 tests)
+### ThreadSafety (7 tests)
 - Concurrent read/write operations on SideDataBag
 - Concurrent add operations with different keys
 - Concurrent dispose while writing
 - Concurrent remove operations on same keys
 - Concurrent clear operations
+- Concurrent GetOrAdd on same key returns a single winner
 
-### Disposal (16 tests)
+### Disposal (22 tests)
 - Dispose idempotency (calling Dispose/DisposeAsync multiple times)
 - Mixed disposal (Dispose then DisposeAsync, and vice versa)
 - DisposeOnReplace behavior via different code paths (TrySetMember, TrySetIndex)
 - ObjectDisposedException thrown after disposal for all operations
 - Explicit disposal, async disposal, and finalizer-based disposal
+- GetOrAdd orphan disposal (lost race, disposed-during-factory); eager overload does not dispose a losing caller-owned value but tracks a stored disposable
 
-### TypedAccessors (8 tests)
+### TypedAccessors (18 tests)
 - TryGet with value types (int, long, nullable types)
 - GetOrDefault with null values and non-nullable types
 - Type checking and conversion
+- GetOrAdd (factory and eager overloads): create-when-missing, return-existing, wrong-type throws InvalidCastException, null member handling, arg validation, Lazy<T> exactly-once pattern
 
 ### Clear (2 tests)
 - Clear on empty bag (edge case)

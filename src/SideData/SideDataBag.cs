@@ -102,7 +102,13 @@ public sealed class SideDataBag(bool disposeOnReplace = false) : DynamicObject, 
     }
 
 
-    // Indexer for non-dynamic callers (optional)
+    /// <summary>
+    /// Gets or sets a value in the dynamic bag with the specified member name.
+    /// When getting, returns the value associated with the provided name, or null if no such member exists.
+    /// When setting, updates the member value, optionally disposing of the previous value if <see cref="DisposeOnReplace"/> is enabled.
+    /// </summary>
+    /// <param name="name">The name of the dynamic member.</param>
+    /// <returns>The value associated with the specified name.</returns>
     public object? this[string name] {
         get {
             lock (_gate) {
@@ -122,6 +128,7 @@ public sealed class SideDataBag(bool disposeOnReplace = false) : DynamicObject, 
             }
         }
     }
+
 
     /// <summary>
     /// Tries to get a typed value stored under the specified name.
@@ -159,6 +166,7 @@ public sealed class SideDataBag(bool disposeOnReplace = false) : DynamicObject, 
         }
     }
 
+
     /// <summary>
     /// Gets the typed value stored under the specified name, or returns a default value when missing or incompatible.
     /// </summary>
@@ -188,6 +196,131 @@ public sealed class SideDataBag(bool disposeOnReplace = false) : DynamicObject, 
         }
     }
 
+
+    /// <summary>
+    /// Gets the value stored under the specified name, or creates and stores one using <paramref name="factory"/>.
+    /// </summary>
+    /// <typeparam name="T">The expected type of the stored value.</typeparam>
+    /// <param name="name">The member name.</param>
+    /// <param name="factory">A delegate that produces the value to store when no member exists under <paramref name="name"/>.</param>
+    /// <returns>The existing value if present, otherwise the newly created value.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="name"/> or <paramref name="factory"/> is null.</exception>
+    /// <exception cref="ObjectDisposedException">The bag has been disposed.</exception>
+    /// <exception cref="InvalidCastException">A member already exists under <paramref name="name"/> but is not assignable to <typeparamref name="T"/>.</exception>
+    /// <remarks>
+    /// The factory runs outside the internal lock so that user code cannot deadlock or reenter the bag. As a result,
+    /// under concurrent calls the factory may run more than once; only one produced value wins and is stored, while any
+    /// losing value is discarded (and disposed if it implements <see cref="IDisposable"/>/<see cref="IAsyncDisposable"/>).
+    /// For exactly-once initialization, store a <see cref="Lazy{T}"/>: <c>bag.GetOrAdd(name, () =&gt; new Lazy&lt;T&gt;(create))</c>.
+    /// </remarks>
+    public T GetOrAdd<T>(string name, Func<T> factory)
+    {
+        if (name is null) {
+            throw new ArgumentNullException(nameof(name));
+        }
+        if (factory is null) {
+            throw new ArgumentNullException(nameof(factory));
+        }
+
+        lock (_gate) {
+            ThrowIfDisposed();
+            if (_members.TryGetValue(name, out var existing)) {
+                return CastOrThrow<T>(existing, name);
+            }
+        }
+
+        var created = factory();
+
+        object? raced;
+        bool lostRace = false;
+        bool wasDisposed = false;
+
+        lock (_gate) {
+            if (_disposed) {
+                wasDisposed = true;
+                raced = null;
+            } else if (_members.TryGetValue(name, out raced)) {
+                lostRace = true;
+            } else {
+                _members[name] = created;
+                Track(created);
+                return created;
+            }
+        }
+
+        DisposeOrphan(created);
+
+        if (wasDisposed) {
+            throw new ObjectDisposedException(nameof(SideDataBag));
+        }
+
+        return lostRace
+            ? CastOrThrow<T>(raced, name)
+            : created;
+    }
+
+
+    /// <summary>
+    /// Gets the value stored under the specified name, or stores and returns <paramref name="value"/> when no member exists.
+    /// </summary>
+    /// <typeparam name="T">The expected type of the stored value.</typeparam>
+    /// <param name="name">The member name.</param>
+    /// <param name="value">The value to store when no member exists under <paramref name="name"/>.</param>
+    /// <returns>The existing value if present, otherwise <paramref name="value"/>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="name"/> is null.</exception>
+    /// <exception cref="ObjectDisposedException">The bag has been disposed.</exception>
+    /// <exception cref="InvalidCastException">A member already exists under <paramref name="name"/> but is not assignable to <typeparamref name="T"/>.</exception>
+    /// <remarks>
+    /// When an existing member wins, <paramref name="value"/> is returned to the caller untouched and is never disposed by the
+    /// bag, mirroring <see cref="System.Collections.Concurrent.ConcurrentDictionary{TKey, TValue}"/> semantics. Only a value
+    /// actually stored becomes owned and tracked for disposal.
+    /// </remarks>
+    public T GetOrAdd<T>(string name, T value)
+    {
+        if (name is null) {
+            throw new ArgumentNullException(nameof(name));
+        }
+
+        lock (_gate) {
+            ThrowIfDisposed();
+
+            if (_members.TryGetValue(name, out var existing)) {
+                return CastOrThrow<T>(existing, name);
+            }
+
+            _members[name] = value;
+            Track(value);
+            return value;
+        }
+    }
+
+
+    private static T CastOrThrow<T>(object? value, string name)
+        => value switch {
+            T t => t,
+            null when default(T) is null => default!,
+            _ => throw new InvalidCastException($"Member '{name}' has type '{value?.GetType().FullName ?? "null"}' which is not assignable to '{typeof(T).FullName}'.")
+        };
+
+
+    private static void DisposeOrphan(object? value)
+    {
+        if (value is null) {
+            return;
+        }
+
+        if (value is IAsyncDisposable ad) {
+            try {
+                ad.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            } catch {
+                // Ignore exceptions in disposal
+            }
+
+        } else if (value is IDisposable d) {
+            SafeDispose(d);
+        }
+    }
+
     /// <summary>
     /// Removes the member with the specified name from the bag.
     /// </summary>
@@ -208,6 +341,7 @@ public sealed class SideDataBag(bool disposeOnReplace = false) : DynamicObject, 
             return false;
         }
     }
+
 
     /// <summary>
     /// Clears all members from the bag.
@@ -233,11 +367,9 @@ public sealed class SideDataBag(bool disposeOnReplace = false) : DynamicObject, 
 
 
     ~SideDataBag()
-    {
-        Dispose();
-    }
+        => Dispose();
 
-    
+
     public void Dispose()
     {
         HashSet<IDisposable> toDispose;
@@ -364,8 +496,8 @@ public sealed class SideDataBag(bool disposeOnReplace = false) : DynamicObject, 
             throw new ObjectDisposedException(nameof(SideDataBag));
         }
     }
-    
-    
+
+
     private readonly HashSet<IAsyncDisposable> _ownedAsync = new(ReferenceEqualityComparer<IAsyncDisposable>.Instance);
     private readonly HashSet<IDisposable> _owned = new(ReferenceEqualityComparer<IDisposable>.Instance);
     private readonly Dictionary<string, object?> _members = new(StringComparer.Ordinal);

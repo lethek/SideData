@@ -71,9 +71,22 @@ if (bag.TryGet("Answer", out int value))
     Console.WriteLine(value);
 }
 
+// Get an existing value or create and store one on first access
+int port = bag.GetOrAdd("Port", () => ComputeDefaultPort());
+
+// Eager overload when the value is already in hand
+int retries = bag.GetOrAdd("Retries", 3);
+
 // Remove/Clear (do not dispose by default)
 bag.Remove("Answer");
 bag.Clear();
+```
+
+For exactly-once initialization under concurrency, store a `Lazy<T>` (the factory itself may run more than once when callers race):
+
+```csharp
+var lazy = bag.GetOrAdd("Parsed", () => new Lazy<Result>(Parse));
+Result result = lazy.Value; // Parse runs at most once
 ```
 
 ## Ownership and disposal
@@ -111,6 +124,8 @@ Typed usage (SideDataBag):
 - IEnumerable<string> GetDynamicMemberNames()
 - bool TryGet<T>(string name, out T? value)
 - T? GetOrDefault<T>(string name, T? defaultValue = default)
+- T GetOrAdd<T>(string name, Func<T> factory) // factory runs outside the lock and may run more than once on races; losing values are disposed if disposable. Throws InvalidCastException on a name clash with an incompatible type.
+- T GetOrAdd<T>(string name, T value) // stores value if absent; a losing value is returned untouched and never disposed. Throws InvalidCastException on a name clash with an incompatible type.
 - bool Remove(string name, bool disposeMember = false)
 - void Clear(bool disposeMembers = false)
 - void Dispose(); ValueTask DisposeAsync();
