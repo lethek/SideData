@@ -39,14 +39,31 @@ Both extension methods live in `ObjectExtensions`. They call through to `SideDat
 
 ### Key implementation details
 
-- **`SideDataAttachment`** (`SideDataAttachment.cs`) — Static class holding the `ConditionalWeakTable<object, SideDataBag>`. Provides `Get`, `GetOrAdd`, `TryGet`, `Remove`. This is the low-level attachment point.
+- **`SideDataAttachment`** (`SideDataAttachment.cs`) — Static class holding the `ConditionalWeakTable<object, IDynamicMetaObjectProvider>`. Provides `Get`, `GetOrAdd`, `TryGet`, `Remove`. This is the low-level attachment point. The value type is `IDynamicMetaObjectProvider`, not `SideDataBag`, **deliberately**: a caller can attach their own dynamic object (an `ExpandoObject`, say) via `SideDataAttachment.GetOrAdd(host, () => (dynamic)expando)` and reach it through `obj.SideData()`. Do not "simplify" this to `SideDataBag`; it would delete a working feature. `obj.SideDataBag()` is the one path that cannot serve a custom bag, and it throws `InvalidOperationException` naming the attached type.
 - **`SideDataBag`** (`SideDataBag.cs`) — `DynamicObject` subclass that stores members in a dictionary. Implements `IDisposable`/`IAsyncDisposable`. Tracks owned disposable values and disposes them on bag disposal or host GC (via finalizer). Thread-safe via internal lock (`_gate`).
 - **`ReferenceEqualityComparer<T>`** (`Internals/`) — Used to key the `ConditionalWeakTable` by reference identity.
 - **Ownership/disposal** — `SideDataBag` can optionally dispose replaced values (`disposeOnReplace: true`). It always disposes tracked `IDisposable`/`IAsyncDisposable` on `Dispose()`/`DisposeAsync()` or finalization.
 
-### Versioning
+## Versioning and releases
 
-Uses **GitVersion** in ContinuousDeployment mode. Version is injected during CI build.
+GitVersion computes the version during the CI build; a local build produces a placeholder. `GitVersion.yml`
+uses **GitVersion 6** naming, so `mode: ContinuousDelivery` there is what v5 called `ContinuousDeployment`.
+Reading it with v5 silently produces a different number.
+
+Untagged commits on `main` publish a `-ci.N` prerelease automatically. A `v*` tag publishes the stable
+release. Both go to nuget.org and neither can be recalled.
+
+Two skills cover this, and they do not overlap:
+
+- **`/changelog`** — after landing a change that could reach package consumers. It decides whether the
+  change earns a `CHANGELOG.md` entry at all, then writes it under `## [Unreleased]`. Use it whenever you
+  are about to touch `CHANGELOG.md` outside a release, and do not hand-write entries from memory: the
+  rules about what ships, which heading applies, and how a line is worded live there.
+- **`/release`** — when cutting a release. It sizes the SemVer bump from the diff, promotes
+  `## [Unreleased]`, commits and tags. It stops before the push that publishes, every time.
+
+`CHANGELOG.md` follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/). Repo-only changes
+(tests, CI, `.claude/**`, this file) never get an entry.
 
 ## Code Style
 
