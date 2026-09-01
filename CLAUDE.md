@@ -75,7 +75,8 @@ the entry the way you treat a test: part of the change, not a follow-up.
 Invoke **`/changelog`** to do it. Do not hand-write entries from memory; the rules about which of the six
 headings applies and how a line is worded live in that skill. "No entry needed" is a valid outcome it will
 reach on its own, so run it rather than deciding for yourself that a change is too small. That skill is
-project-agnostic and derives what ships from the table below, so keep this accurate.
+user-level and shared across projects, not in this repo, so it carries no knowledge of what SideData
+ships. The table below is the project-specific half of it. Keep it accurate.
 
 #### What ships in this repo
 

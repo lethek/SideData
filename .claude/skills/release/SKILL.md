@@ -90,8 +90,8 @@ time a release commit exists, origin may already hold a published tag.
 Confirm CI is green **on the commit being released**, not merely on `main`. The latest run is usually
 for an older commit, so compare the SHAs rather than trusting the green tick.
 
-**Ask the publishing workflow, not the newest run.** This repo also runs CodeQL and DevSkim, and a green
-run on either says nothing about whether the package builds. Find the one that publishes, then filter to it:
+**Ask the publishing workflow, not the newest run.** A repo may run several workflows, and a green lint or
+scanning run says nothing about whether the package builds. Find the one that publishes, then filter to it:
 
 ```bash
 grep -l 'nuget push' .github/workflows/*.yml     # the publishing workflow
