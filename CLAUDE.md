@@ -72,11 +72,22 @@ their entry when they land, in the same commit as the code where practical.
 A task that changed something consumers receive and left `CHANGELOG.md` untouched is not finished. Treat
 the entry the way you treat a test: part of the change, not a follow-up.
 
-Invoke **`/changelog`** to do it. Do not hand-write entries from memory; the rules about what ships, which
-of the six headings applies, and how a line is worded live in that skill. "No entry needed" is a valid
-outcome it will reach on its own, so run it rather than deciding for yourself that a change is too small.
+Invoke **`/changelog`** to do it. Do not hand-write entries from memory; the rules about which of the six
+headings applies and how a line is worded live in that skill. "No entry needed" is a valid outcome it will
+reach on its own, so run it rather than deciding for yourself that a change is too small. That skill is
+project-agnostic and derives what ships from the table below, so keep this accurate.
 
-Repo-only changes (tests, CI, `.claude/**`, `GitVersion.yml`, this file) never get an entry.
+#### What ships in this repo
+
+| Path | Entry? | Notes |
+|---|---|---|
+| `src/SideData/**/*.cs` | Yes, if the public API or its observable behaviour changed | Internal refactors that change nothing observable get no entry |
+| `src/SideData/SideData.csproj` | Yes, for dependency versions, target frameworks, `Description`, `PackageTags` | These ship even though no `.cs` file moved |
+| `README.md` | Only if it corrects something wrong | `PackageReadmeFile` is set, so it is the nuget.org landing page. Documenting existing behaviour is not a change to the software. |
+| `tests/**`, `.github/**`, `CHANGELOG.md`, `CLAUDE.md`, `.claude/**`, `GitVersion.yml`, `global.json`, `*.slnx`, `.gitignore` | No | Repo-only |
+
+The library-specific trap: members reached through `obj.SideData()` bind at runtime, so removing or
+renaming one breaks consumers with no build error here or in their code. Size those from the source.
 
 ### Cutting a release
 
