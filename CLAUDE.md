@@ -33,16 +33,25 @@ SideData attaches arbitrary data to any .NET reference-type object using `Condit
 
 1. **Dynamic API** — `obj.SideData()` returns a `dynamic` `SideDataBag` (which extends `DynamicObject`) for property-style access (`bag.Foo = 42`) and indexer access (`bag["key"] = value`).
 
-2. **Strongly-typed API** — `obj.SideDataBag()` returns the same `SideDataBag` but as its concrete type, providing `TryGet<T>`, `GetOrDefault<T>`, `Remove`, `Clear`, etc.
+2. **Strongly-typed API** — `obj.SideDataBag()` returns the same `SideDataBag` but as its concrete type, providing `TryGet<T>`, `GetOrDefault<T>`, `GetOrAdd<T>`, `Remove`, `Clear`, etc.
 
-Both extension methods live in `ObjectExtensions`. They call through to `SideDataAttachment`, which manages the static `ConditionalWeakTable` mapping host objects to their `SideDataBag` instances.
+Both extension methods live in `ObjectExtensions`. They call through to `SideDataAttachment`, which manages the static `ConditionalWeakTable` mapping host objects to their attached bags.
+
+Asking for a bag with a `disposeOnReplace` that disagrees with the one already attached throws `InvalidOperationException`. The flag is fixed for the bag's lifetime; the first call to attach wins.
 
 ### Key implementation details
 
 - **`SideDataAttachment`** (`SideDataAttachment.cs`) — Static class holding the `ConditionalWeakTable<object, IDynamicMetaObjectProvider>`. Provides `Get`, `GetOrAdd`, `TryGet`, `Remove`. This is the low-level attachment point. The value type is `IDynamicMetaObjectProvider`, not `SideDataBag`, **deliberately**: a caller can attach their own dynamic object (an `ExpandoObject`, say) via `SideDataAttachment.GetOrAdd(host, () => (dynamic)expando)` and reach it through `obj.SideData()`. Do not "simplify" this to `SideDataBag`; it would delete a working feature. `obj.SideDataBag()` is the one path that cannot serve a custom bag, and it throws `InvalidOperationException` naming the attached type.
 - **`SideDataBag`** (`SideDataBag.cs`) — `DynamicObject` subclass that stores members in a dictionary. Implements `IDisposable`/`IAsyncDisposable`. Tracks owned disposable values and disposes them on bag disposal or host GC (via finalizer). Thread-safe via internal lock (`_gate`).
-- **`ReferenceEqualityComparer<T>`** (`Internals/`) — Used to key the `ConditionalWeakTable` by reference identity.
+- **`ReferenceEqualityComparer<T>`** (`Internals/`) — Backs the `_owned` and `_ownedAsync` `HashSet`s in `SideDataBag` (`SideDataBag.cs:503-504`), so a stored value is tracked by identity rather than by its own `Equals`. It is **not** used for the `ConditionalWeakTable`, which is reference-keyed inherently and takes no comparer. It exists because `System.Collections.Generic.ReferenceEqualityComparer` is .NET 5+ only and this library still targets `netstandard2.0`.
 - **Ownership/disposal** — `SideDataBag` can optionally dispose replaced values (`disposeOnReplace: true`). It always disposes tracked `IDisposable`/`IAsyncDisposable` on `Dispose()`/`DisposeAsync()` or finalization.
+
+### Gotchas worth knowing before you change anything
+
+- **`GetOrAdd` overload resolution.** A delegate argument always binds to `GetOrAdd<T>(string, Func<T>)` and gets *invoked*, not stored. Storing a delegate needs an explicit type argument: `bag.GetOrAdd<Func<int>>(name, cb)`. Adding another overload here risks silently recapturing existing calls.
+- **`GetOrAdd` is typed-API only.** `obj.SideData().GetOrAdd(name, () => x)` is a compile error (CS1977): a lambda cannot be an argument to a dynamically dispatched call.
+- **`dynamic` hides breaking changes.** Members reached through `obj.SideData()` bind at runtime, so renaming or removing one produces no build error in a consumer, and none here either. Judge API breaks from the source, not from whether anything failed to compile.
+- **TUnit assertions cannot bind `dynamic`.** In tests, cast to `(object)` first: `await Assert.That((object)found).IsSameReferenceAs((object)created)`. Since most of this API returns `dynamic`, this comes up constantly.
 
 ## Versioning and releases
 

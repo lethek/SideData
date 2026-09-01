@@ -113,6 +113,15 @@ Notes:
 - Exceptions thrown during disposal are swallowed to ensure cleanup continues.
 - After disposal, any operation on the bag throws ObjectDisposedException.
 
+`disposeOnReplace` is fixed for the life of the bag, and the first call that attaches one decides it. Asking for the same object's bag again with a different setting throws `InvalidOperationException` rather than silently returning a bag that behaves differently to what you asked for:
+
+```csharp
+var a = obj.SideDataBag();                            // attaches with disposeOnReplace: false
+var b = obj.SideDataBag(disposeOnReplace: true);      // throws InvalidOperationException
+```
+
+Pass the flag at the first call site, or leave it off everywhere and dispose explicitly.
+
 ## Thread-safety
 
 - Each bag serializes its operations internally; individual operations are thread-safe.
@@ -130,6 +139,7 @@ Dynamic usage (examples):
 - bag["key"] = value; var y = bag["key"];
 
 Typed usage (SideDataBag):
+- bool DisposeOnReplace { get; } // fixed when the bag is created
 - object? this[string name] { get; set; }
 - IEnumerable<string> GetDynamicMemberNames()
 - bool TryGet<T>(string name, out T? value)
@@ -141,10 +151,26 @@ Typed usage (SideDataBag):
 - void Dispose(); ValueTask DisposeAsync();
 
 Low-level attachment API (advanced):
-- dynamic SideDataAttachment.Get(object hostObject)
-- dynamic SideDataAttachment.GetOrAdd(object hostObject, Func<dynamic>? factory = null)
+- dynamic SideDataAttachment.Get(object hostObject) // throws KeyNotFoundException when nothing is attached
+- dynamic SideDataAttachment.GetOrAdd(object hostObject, Func<dynamic>? newValue = null)
 - bool SideDataAttachment.TryGet(object hostObject, out dynamic value)
 - void SideDataAttachment.Remove(object hostObject) // disposes the bag if present and detaches it
+
+### Attaching your own bag
+
+The attachment table stores any `IDynamicMetaObjectProvider`, not just `SideDataBag`, so you can supply your own dynamic object and still reach it through the dynamic API:
+
+```csharp
+var expando = new ExpandoObject();
+SideDataAttachment.GetOrAdd(host, () => (dynamic)expando);
+
+dynamic bag = host.SideData();   // returns the expando
+bag.Answer = 42;
+```
+
+The factory only runs when nothing is attached yet, so the first caller wins. A value that does not implement `IDynamicMetaObjectProvider` is rejected when you attach it.
+
+`obj.SideDataBag()` is the one path that cannot serve a custom bag, since it promises a `SideDataBag`. It throws `InvalidOperationException` naming the attached type; use `obj.SideData()` instead.
 
 ## Tips and performance notes
 
