@@ -16,10 +16,9 @@
     <ItemGroup>
         <PackageReference Include="xunit.v3.mtp-v2" Version="3.2.2"/>
         <PackageReference Include="Bogus" Version="35.6.5"/>
-        <PackageReference Include="coverlet.collector" Version="10.0.1">
-            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-            <PrivateAssets>all</PrivateAssets>
-        </PackageReference>
+        <!-- coverlet.collector is a VSTest data collector and does nothing under Microsoft.Testing.Platform.
+             MTP's own extension is what backs the "dotnet test" coverage switch. -->
+        <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.1.4"/>
     </ItemGroup>
 
     <ItemGroup>
