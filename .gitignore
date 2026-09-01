@@ -353,3 +353,7 @@ MigrationBackup/
 CLAUDE.local.md
 .fuse/
 TestResults/
+
+# The [Rr]elease/ build-output rule above also matches .claude/skills/release/, which is source.
+# The directory must be re-included, not just the file: git will not descend into an excluded dir.
+!.claude/skills/release/
