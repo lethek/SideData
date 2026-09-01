@@ -53,17 +53,29 @@ Reading it with v5 silently produces a different number.
 Untagged commits on `main` publish a `-ci.N` prerelease automatically. A `v*` tag publishes the stable
 release. Both go to nuget.org and neither can be recalled.
 
-Two skills cover this, and they do not overlap:
+### Keep the changelog in lockstep with the code
 
-- **`/changelog`** — after landing a change that could reach package consumers. It decides whether the
-  change earns a `CHANGELOG.md` entry at all, then writes it under `## [Unreleased]`. Use it whenever you
-  are about to touch `CHANGELOG.md` outside a release, and do not hand-write entries from memory: the
-  rules about what ships, which heading applies, and how a line is worded live there.
-- **`/release`** — when cutting a release. It sizes the SemVer bump from the diff, promotes
-  `## [Unreleased]`, commits and tags. It stops before the push that publishes, every time.
+**`CHANGELOG.md` is updated as part of the work, not written up at release time.** Finishing a distinct
+unit of work that touched shipped code means adding its `## [Unreleased]` entry before you commit it, open
+the PR, or report the task done. A feature, a bug fix, a behaviour change and a dependency bump each get
+their entry when they land, in the same commit as the code where practical.
 
-`CHANGELOG.md` follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/). Repo-only changes
-(tests, CI, `.claude/**`, this file) never get an entry.
+A task that changed something consumers receive and left `CHANGELOG.md` untouched is not finished. Treat
+the entry the way you treat a test: part of the change, not a follow-up.
+
+Invoke **`/changelog`** to do it. Do not hand-write entries from memory; the rules about what ships, which
+of the six headings applies, and how a line is worded live in that skill. "No entry needed" is a valid
+outcome it will reach on its own, so run it rather than deciding for yourself that a change is too small.
+
+Repo-only changes (tests, CI, `.claude/**`, `GitVersion.yml`, this file) never get an entry.
+
+### Cutting a release
+
+Invoke **`/release`**. It sizes the SemVer bump from the diff, promotes `## [Unreleased]`, commits and
+tags, and stops before the push that publishes, every time. If `## [Unreleased]` is empty or stale when it
+runs, the lockstep rule above was not followed and the release is being reconstructed from memory.
+
+`CHANGELOG.md` follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 
 ## Code Style
 

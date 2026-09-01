@@ -2,11 +2,13 @@
 name: changelog
 description: >-
   Decide whether a change needs a CHANGELOG entry and write it under ## [Unreleased].
-  Use after landing a change that could reach package consumers, or when asked to add,
-  reword or check a changelog entry; do NOT use to cut a release or promote the
-  Unreleased section, which is the /release skill's job.
+  Use when finishing any distinct unit of work that touched shipped code - a feature,
+  a bug fix, a behaviour change - before committing it, opening a PR, or reporting the
+  task done; also when asked to add, reword or check an entry. The changelog is kept in
+  lockstep with the code, NOT written up at release time. Do NOT use to cut a release or
+  promote the Unreleased section, which is the /release skill's job.
 user-invocable: true
-auto-trigger: false
+auto-trigger: true
 trigger_keywords:
   - changelog
   - changelog entry
@@ -14,20 +16,37 @@ trigger_keywords:
   - keep a changelog
   - note the change
   - record the change
+  - finished the feature
+  - fixed the bug
+  - open a pr
+  - ready to commit
+  - task complete
 ---
 
 # /changelog — Write an Unreleased Entry
 
 ## Orientation
 
+The changelog is maintained **in lockstep with the code**, not reconstructed at release time. By the time
+`/release` runs, `## [Unreleased]` should already be complete and merely need promoting. Backfilling a
+release's worth of entries from a diff is the failure mode this skill exists to prevent: it is done from
+memory of what the commits meant rather than from what actually shipped, and it is where entries get
+missed.
+
 **Use when:**
-- A change has landed and you need to decide whether it warrants a `CHANGELOG.md` entry
+- Finishing a distinct unit of work that touched shipped code, before you commit it, open the PR, or
+  report the task done. A feature, a bug fix, a behaviour change, a dependency bump.
 - Asked to add, reword, or review an entry
 - A breaking change needs recording
 
 **Do NOT use when:**
 - Cutting a release, promoting `## [Unreleased]`, or picking a version number. That is `/release`.
 - The change is still being designed. Write the entry from what shipped, not from what was planned.
+- The work touched nothing consumers receive. Step 1 settles this, and "no entry" is a valid outcome.
+
+**When in the task to run it:** at the end, once the change is settled and verified, and in the same
+commit as the code where practical. At the latest, in the final commit of the task, before pushing or
+opening the PR. Not partway through, when the shape may still change.
 
 `CHANGELOG.md` follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 
@@ -96,7 +115,9 @@ Rules:
 
 ## Step 4: Check it against what is already there
 
-`## [Unreleased]` is the diff since the last release, not the history behind it.
+`## [Unreleased]` is the diff since the last release, not the history behind it. Because entries are
+written per task, this section accumulates across many commits, and successive tasks can contradict each
+other.
 
 A change both introduced and fixed inside that window gets no new entry: amend the entry it corrects. If
 you added `Foo.Bar()` last week and renamed it today, the `### Added` line should just name the new
@@ -116,6 +137,8 @@ scope.
 
 ## Quality Gates
 
+- [ ] This ran at the end of the task, not at release time, and not partway through the work
+- [ ] The entry is in the same commit as the code, or in the task's final commit before pushing
 - [ ] The change touches something in the "Yes" rows of step 1, or no entry was written
 - [ ] The heading is one of the spec's six, and sections stay in spec order
 - [ ] One line, naming the API in backticks, with no rationale or migration prose
