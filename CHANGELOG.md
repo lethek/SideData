@@ -10,6 +10,8 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-09-02
+
 ### Changed
 
 - `obj.SideDataBag()` throws `InvalidOperationException` naming the attached type when the host carries a custom `IDynamicMetaObjectProvider`, rather than surfacing a `RuntimeBinderException`.
@@ -53,7 +55,8 @@ release rather than record it as it happened.
 - `SideData.LowLevel.TypedSideData<T>`, keying attached values by type, with `Set`, `Add`, `TryAdd`, `Remove`, `Get`, `GetOrDefault`, `GetOrAdd` and `TryGet`.
 - Targets `netstandard2.0`, `netstandard2.1` and `net7.0`.
 
-[Unreleased]: https://github.com/lethek/SideData/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/lethek/SideData/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/lethek/SideData/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/lethek/SideData/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/lethek/SideData/compare/v0.1.0...v1.0.0
 [0.1.0]: https://github.com/lethek/SideData/releases/tag/v0.1.0
