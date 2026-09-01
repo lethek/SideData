@@ -89,6 +89,16 @@ var lazy = bag.GetOrAdd("Parsed", () => new Lazy<Result>(Parse));
 Result result = lazy.Value; // Parse runs at most once
 ```
 
+To store a delegate as a value, supply the type argument explicitly. Without it, overload resolution prefers the factory overload and invokes the delegate instead of storing it:
+
+```csharp
+Func<int> callback = () => 1;
+bag.GetOrAdd("Callback", callback);              // invokes callback, stores 1
+bag.GetOrAdd<Func<int>>("Callback", callback);   // stores callback itself
+```
+
+`GetOrAdd` is only available on the typed API. Calling it through the dynamic API with a lambda is a compile error (CS1977), because lambdas cannot be arguments to a dynamically dispatched call.
+
 ## Ownership and disposal
 
 SideDataBag can track IDisposable and IAsyncDisposable values stored in it. By default, the bag owns these values and will dispose them when the bag is disposed or when the host object is garbage collected.

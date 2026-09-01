@@ -149,16 +149,7 @@ public sealed class SideDataBag(bool disposeOnReplace = false) : DynamicObject, 
             ThrowIfDisposed();
 
             if (_members.TryGetValue(name, out var v)) {
-                if (v is T t) {
-                    value = t;
-                    return true;
-                }
-
-                // If stored value is null and T can accept null (ref or Nullable<T>) treat as success
-                if (v is null && default(T) is null) {
-                    value = default;
-                    return true;
-                }
+                return TryCast(v, out value);
             }
 
             value = default;
@@ -182,17 +173,9 @@ public sealed class SideDataBag(bool disposeOnReplace = false) : DynamicObject, 
         lock (_gate) {
             ThrowIfDisposed();
 
-            if (_members.TryGetValue(name, out var v)) {
-                if (v is T t) {
-                    return t;
-                }
-
-                if (v is null && default(T) is null) {
-                    return default;
-                }
-            }
-
-            return defaultValue;
+            return _members.TryGetValue(name, out var v) && TryCast<T>(v, out var value)
+                ? value
+                : defaultValue;
         }
     }
 
@@ -231,32 +214,28 @@ public sealed class SideDataBag(bool disposeOnReplace = false) : DynamicObject, 
 
         var created = factory();
 
-        object? raced;
-        bool lostRace = false;
-        bool wasDisposed = false;
+        // While the factory ran outside the lock, another caller may have stored a value
+        // under this name, or the bag may have been disposed.
+        object? winner = null;
+        bool wasDisposed;
 
         lock (_gate) {
-            if (_disposed) {
-                wasDisposed = true;
-                raced = null;
-            } else if (_members.TryGetValue(name, out raced)) {
-                lostRace = true;
-            } else {
+            wasDisposed = _disposed;
+            if (!wasDisposed && !_members.TryGetValue(name, out winner)) {
                 _members[name] = created;
                 Track(created);
                 return created;
             }
         }
 
+        // Our value lost, so discard it before reporting what happened.
         DisposeOrphan(created);
 
         if (wasDisposed) {
             throw new ObjectDisposedException(nameof(SideDataBag));
         }
 
-        return lostRace
-            ? CastOrThrow<T>(raced, name)
-            : created;
+        return CastOrThrow<T>(winner, name);
     }
 
 
@@ -274,6 +253,11 @@ public sealed class SideDataBag(bool disposeOnReplace = false) : DynamicObject, 
     /// When an existing member wins, <paramref name="value"/> is returned to the caller untouched and is never disposed by the
     /// bag, mirroring <see cref="System.Collections.Concurrent.ConcurrentDictionary{TKey, TValue}"/> semantics. Only a value
     /// actually stored becomes owned and tracked for disposal.
+    /// <para>
+    /// When <paramref name="value"/> is a delegate, overload resolution prefers <see cref="GetOrAdd{T}(string, Func{T})"/> and
+    /// invokes it as a factory instead of storing it. To store a delegate as a value, supply the type argument explicitly:
+    /// <c>bag.GetOrAdd&lt;Func&lt;int&gt;&gt;(name, callback)</c>.
+    /// </para>
     /// </remarks>
     public T GetOrAdd<T>(string name, T value)
     {
@@ -295,31 +279,43 @@ public sealed class SideDataBag(bool disposeOnReplace = false) : DynamicObject, 
     }
 
 
+    /// <summary>
+    /// Determines whether a stored value is usable as <typeparamref name="T"/>. A stored null counts as a match when
+    /// <typeparamref name="T"/> can accept null, that is, when it is a reference or <see cref="Nullable{T}"/> type.
+    /// </summary>
+    private static bool TryCast<T>(object? value, out T? result)
+    {
+        if (value is T t) {
+            result = t;
+            return true;
+        }
+
+        if (value is null && default(T) is null) {
+            result = default;
+            return true;
+        }
+
+        result = default;
+        return false;
+    }
+
+
     private static T CastOrThrow<T>(object? value, string name)
-        => value switch {
-            T t => t,
-            null when default(T) is null => default!,
-            _ => throw new InvalidCastException($"Member '{name}' has type '{value?.GetType().FullName ?? "null"}' which is not assignable to '{typeof(T).FullName}'.")
-        };
+        => TryCast<T>(value, out var result)
+            ? result!
+            : throw new InvalidCastException($"Member '{name}' has type '{value?.GetType().FullName ?? "null"}' which is not assignable to '{typeof(T).FullName}'.");
 
 
     private static void DisposeOrphan(object? value)
     {
-        if (value is null) {
-            return;
-        }
-
+        // Prefer async disposal when available, matching Track's ownership preference
         if (value is IAsyncDisposable ad) {
-            try {
-                ad.DisposeAsync().AsTask().GetAwaiter().GetResult();
-            } catch {
-                // Ignore exceptions in disposal
-            }
-
+            SafeDisposeBlocking(ad);
         } else if (value is IDisposable d) {
             SafeDispose(d);
         }
     }
+
 
     /// <summary>
     /// Removes the member with the specified name from the bag.
@@ -372,21 +368,8 @@ public sealed class SideDataBag(bool disposeOnReplace = false) : DynamicObject, 
 
     public void Dispose()
     {
-        HashSet<IDisposable> toDispose;
-        HashSet<IAsyncDisposable> toDisposeAsync;
-
-        lock (_gate) {
-            if (_disposed) {
-                return;
-            }
-            _disposed = true;
-
-            toDispose = new HashSet<IDisposable>(_owned, _owned.Comparer);
-            toDisposeAsync = new HashSet<IAsyncDisposable>(_ownedAsync, _ownedAsync.Comparer);
-
-            _members.Clear();
-            _owned.Clear();
-            _ownedAsync.Clear();
+        if (!TryBeginDispose(out var toDispose, out var toDisposeAsync)) {
+            return;
         }
 
         foreach (var d in toDispose) {
@@ -397,34 +380,17 @@ public sealed class SideDataBag(bool disposeOnReplace = false) : DynamicObject, 
         // If DisposeAsync() requires a SynchronizationContext, this may deadlock,
         // but there is no alternative in a finalizer. The try/catch prevents crashes.
         foreach (var ad in toDisposeAsync) {
-            try {
-                ad.DisposeAsync().AsTask().GetAwaiter().GetResult();
-            } catch {
-                // Ignore exceptions in disposal
-            }
+            SafeDisposeBlocking(ad);
         }
 
         GC.SuppressFinalize(this);
     }
 
-    
+
     public async ValueTask DisposeAsync()
     {
-        HashSet<IDisposable> toDispose;
-        HashSet<IAsyncDisposable> toDisposeAsync;
-
-        lock (_gate) {
-            if (_disposed) {
-                return;
-            }
-            _disposed = true;
-
-            toDispose = new HashSet<IDisposable>(_owned, _owned.Comparer);
-            toDisposeAsync = new HashSet<IAsyncDisposable>(_ownedAsync, _ownedAsync.Comparer);
-
-            _members.Clear();
-            _owned.Clear();
-            _ownedAsync.Clear();
+        if (!TryBeginDispose(out var toDispose, out var toDisposeAsync)) {
+            return;
         }
 
         foreach (var d in toDispose) {
@@ -442,7 +408,33 @@ public sealed class SideDataBag(bool disposeOnReplace = false) : DynamicObject, 
         GC.SuppressFinalize(this);
     }
 
-    
+
+    /// <summary>
+    /// Marks the bag disposed and hands back the values it owned, so callers can dispose them outside the lock.
+    /// Returns false when the bag was already disposed.
+    /// </summary>
+    private bool TryBeginDispose(out HashSet<IDisposable> toDispose, out HashSet<IAsyncDisposable> toDisposeAsync)
+    {
+        lock (_gate) {
+            if (_disposed) {
+                toDispose = null!;
+                toDisposeAsync = null!;
+                return false;
+            }
+            _disposed = true;
+
+            toDispose = new HashSet<IDisposable>(_owned, _owned.Comparer);
+            toDisposeAsync = new HashSet<IAsyncDisposable>(_ownedAsync, _ownedAsync.Comparer);
+
+            _members.Clear();
+            _owned.Clear();
+            _ownedAsync.Clear();
+            return true;
+        }
+    }
+
+
+
     private void Track(object? value)
     {
         if (value is null) {
@@ -466,11 +458,7 @@ public sealed class SideDataBag(bool disposeOnReplace = false) : DynamicObject, 
 
         if (value is IAsyncDisposable ad && _ownedAsync.Remove(ad)) {
             if (dispose) {
-                try {
-                    ad.DisposeAsync().AsTask().GetAwaiter().GetResult();
-                } catch {
-                    // Ignore exceptions in disposal
-                }
+                SafeDisposeBlocking(ad);
             }
         } else if (value is IDisposable d && _owned.Remove(d)) {
             if (dispose) {
@@ -484,6 +472,20 @@ public sealed class SideDataBag(bool disposeOnReplace = false) : DynamicObject, 
     {
         try {
             d.Dispose();
+        } catch {
+            // Ignore exceptions in disposal
+        }
+    }
+
+
+    /// <summary>
+    /// Blocks on <see cref="IAsyncDisposable.DisposeAsync"/> for the synchronous and finalizer paths, which have no
+    /// way to await. Exceptions are swallowed so disposal of the remaining values still runs.
+    /// </summary>
+    private static void SafeDisposeBlocking(IAsyncDisposable ad)
+    {
+        try {
+            ad.DisposeAsync().AsTask().GetAwaiter().GetResult();
         } catch {
             // Ignore exceptions in disposal
         }

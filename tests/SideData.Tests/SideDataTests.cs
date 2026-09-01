@@ -1,4 +1,6 @@
-﻿using SideData.Fixtures;
+﻿using System.Dynamic;
+
+using SideData.Fixtures;
 using SideData.TestData;
 
 namespace SideData;
@@ -248,6 +250,36 @@ public class SideDataTests(TestDataFixture testDataFixture) : IClassFixture<Test
         ((IDisposable)bag).Dispose();
 
         Assert.Throws<ObjectDisposedException>(() => bag.X = 1);
+    }
+
+    #endregion
+
+
+    #region Custom bags
+
+    [Fact]
+    public void SideData_ReturnsCustomBag_AttachedViaSideDataAttachment()
+    {
+        var host = new object();
+        var expando = new ExpandoObject();
+        SideDataAttachment.GetOrAdd(host, () => (dynamic)expando);
+
+        Assert.Same(expando, (object)host.SideData());
+
+        dynamic bag = host.SideData();
+        bag.Answer = 42;
+        Assert.Equal(42, (int)bag.Answer);
+    }
+
+
+    [Fact]
+    public void SideDataBag_Throws_WhenAttachedBagIsNotASideDataBag()
+    {
+        var host = new object();
+        SideDataAttachment.GetOrAdd(host, () => (dynamic)new ExpandoObject());
+
+        var ex = Assert.Throws<InvalidOperationException>(() => host.SideDataBag());
+        Assert.Contains(nameof(ExpandoObject), ex.Message);
     }
 
     #endregion

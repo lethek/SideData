@@ -21,15 +21,7 @@ public static class ObjectExtensions
     /// Thrown when a side-data bag already exists for <paramref name="obj"/> but with a different <paramref name="disposeOnReplace"/> setting.
     /// </exception>
     public static dynamic SideData<T>(this T obj, bool disposeOnReplace = false) where T : class
-    {
-        var bag = SideDataAttachment.GetOrAdd(obj, () => new SideDataBag(disposeOnReplace));
-        if (bag is SideDataBag sdBag && sdBag.DisposeOnReplace != disposeOnReplace) {
-            throw new InvalidOperationException(
-                $"A side-data bag already exists for this object with disposeOnReplace={sdBag.DisposeOnReplace}. " +
-                $"Cannot retrieve it with disposeOnReplace={disposeOnReplace}.");
-        }
-        return bag;
-    }
+        => GetOrAttach(obj, disposeOnReplace);
 
 
     /// <summary>
@@ -41,11 +33,22 @@ public static class ObjectExtensions
     /// This ensures that disposable side-data does not leak resources.
     /// </param>
     /// <exception cref="InvalidOperationException">
-    /// Thrown when a side-data bag already exists for <paramref name="obj"/> but with a different <paramref name="disposeOnReplace"/> setting.
+    /// Thrown when a side-data bag already exists for <paramref name="obj"/> but with a different <paramref name="disposeOnReplace"/> setting,
+    /// or when the attached bag is a custom <see cref="System.Dynamic.IDynamicMetaObjectProvider"/> rather than a <see cref="SideDataBag"/>.
     /// </exception>
     public static SideDataBag SideDataBag<T>(this T obj, bool disposeOnReplace = false) where T : class
     {
-        var bag = SideDataAttachment.GetOrAdd(obj, () => new SideDataBag(disposeOnReplace));
+        var bag = GetOrAttach(obj, disposeOnReplace);
+        return bag as SideDataBag
+            ?? throw new InvalidOperationException(
+                $"The bag attached to this object is a custom {bag.GetType().FullName} rather than a {typeof(SideDataBag).FullName}. " +
+                $"Use {nameof(SideData)}() to access it dynamically.");
+    }
+
+
+    private static object GetOrAttach<T>(T obj, bool disposeOnReplace) where T : class
+    {
+        object bag = SideDataAttachment.GetOrAdd(obj, disposeOnReplace ? CreateDisposing : CreateDefault);
         if (bag is SideDataBag sdBag && sdBag.DisposeOnReplace != disposeOnReplace) {
             throw new InvalidOperationException(
                 $"A side-data bag already exists for this object with disposeOnReplace={sdBag.DisposeOnReplace}. " +
@@ -53,4 +56,9 @@ public static class ObjectExtensions
         }
         return bag;
     }
+
+
+    // Cached so the common path does not allocate a closure on every call
+    private static readonly Func<dynamic> CreateDefault = () => new SideDataBag(false);
+    private static readonly Func<dynamic> CreateDisposing = () => new SideDataBag(true);
 }
