@@ -7,23 +7,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 dotnet build                                                    # Build entire solution
 dotnet test                                                     # Run all tests
-dotnet test --filter-class "SideData.SideDataTests"            # Run tests in a specific class (requires fully qualified name)
-dotnet test --filter-method "SideData.SideDataTests.Remove_DoesNotDispose_ByDefault_But_Disposes_When_Requested"  # Run a single test method (fully qualified)
-dotnet test --filter-namespace "SideData"                      # Run tests in a namespace
-dotnet test --framework net8.0                                 # Run tests against a specific TFM
-dotnet test --list-tests                                       # List all available tests without running them
-dotnet pack -c Release                                         # Create NuGet package
+dotnet test --framework net8.0                                  # Run tests against a specific TFM
+dotnet test --treenode-filter "/*/*/SideDataBagTests/*"         # Run tests in a specific class
+dotnet test --treenode-filter "/*/*/*/Clear_Throws_After_Dispose"  # Run a single test method
+dotnet test --treenode-filter "/*/*/*/*[Category=Disposal]"     # Run tests with a category
+dotnet pack -c Release                                          # Create NuGet package
 ```
 
-**Note:** xUnit v3 with MTP uses different filter syntax than VSTest:
-- **Class filtering:** `--filter-class "Namespace.ClassName"` (requires fully qualified name)
-- **Method filtering:** `--filter-method "Namespace.ClassName.MethodName"` (requires fully qualified name)
-- **Namespace filtering:** `--filter-namespace "NamespaceName"`
-- **Negative filters:** `--filter-not-class`, `--filter-not-method`, `--filter-not-namespace`
-- **Multiple values:** `--filter-class "ClassA" "ClassB"` (space-separated, not repeated flags)
-- **Wildcards:** Support for `*` at beginning/end of filter values
+**Note:** TUnit runs on Microsoft Testing Platform and filters with `--treenode-filter`, not VSTest's `--filter`. The path is `/Assembly/Namespace/Class/Method`, and `*` matches any segment:
+- **Class:** `/*/*/SideDataBagTests/*`
+- **Method:** `/*/*/*/MethodName`
+- **Namespace:** `/*/SideData/*/*`
+- **Category:** `/*/*/*/*[Category=Disposal]`, negated with `[Category!=Disposal]`
+- **Combining:** `|` for OR, adjacent `[...][...]` brackets for AND
 
-Tests use **xUnit v3.2.2** with **Microsoft Testing Platform v2** and target `net10.0` and `net8.0`. The library multi-targets `net8.0`, `netstandard2.1`, and `netstandard2.0`.
+Categories come from `[Property("Category", "...")]` on the test method. The ones in use are `Disposal`, `TypedAccessors`, `ThreadSafety`, `Clear` and `Internals`.
+
+Tests use **TUnit 1.65.31** and target `net10.0` and `net8.0`. The library multi-targets `net8.0`, `netstandard2.1`, and `netstandard2.0`.
 
 ## Architecture
 

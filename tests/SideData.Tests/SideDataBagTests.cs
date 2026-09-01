@@ -3,10 +3,11 @@ using SideData.TestData;
 
 namespace SideData;
 
-public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<TestDataFixture>
+[ClassDataSource<TestDataFixture>(Shared = SharedType.PerClass)]
+public class SideDataBagTests(TestDataFixture testDataFixture)
 {
-    [Fact]
-    public void TypedAccessors_TryGet_And_GetOrDefault_Work_AsExpected()
+    [Test]
+    public async Task TypedAccessors_TryGet_And_GetOrDefault_Work_AsExpected()
     {
         var host = new object();
         var bag = host.SideDataBag();
@@ -16,52 +17,52 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
         bag["NullRef"] = null;
 
         // TryGet success
-        Assert.True(bag.TryGet("Contact", out object? boxed));
-        Assert.Same(contact, boxed);
+        await Assert.That(bag.TryGet("Contact", out object? boxed)).IsTrue();
+        await Assert.That(boxed).IsSameReferenceAs(contact);
 
         // TryGet wrong type
-        Assert.False(bag.TryGet<int>("Contact", out var wrong));
-        Assert.Equal(default, wrong);
+        await Assert.That(bag.TryGet<int>("Contact", out var wrong)).IsFalse();
+        await Assert.That(wrong).IsEqualTo(default);
 
         // TryGet null into nullable/ref type succeeds
-        Assert.True(bag.TryGet<object?>("NullRef", out var nullObj));
-        Assert.Null(nullObj);
+        await Assert.That(bag.TryGet<object?>("NullRef", out var nullObj)).IsTrue();
+        await Assert.That(nullObj).IsNull();
 
         // GetOrDefault success
         var got = bag.GetOrDefault<object>("Contact");
-        Assert.Same(contact, got);
+        await Assert.That(got).IsSameReferenceAs(contact);
 
         // GetOrDefault missing -> returns provided default
         var def = new object();
         var gotDefault = bag.GetOrDefault<object>("Missing", def);
-        Assert.Same(def, gotDefault);
+        await Assert.That(gotDefault).IsSameReferenceAs(def);
 
         // GetOrDefault incompatible -> returns provided default
         var def2 = 42;
         var gotDefault2 = bag.GetOrDefault<int>("Contact", def2);
-        Assert.Equal(def2, gotDefault2);
+        await Assert.That(gotDefault2).IsEqualTo(def2);
 
         // GetOrDefault when value is null and T accepts null -> returns default(T)
         var gotNullDefault = bag.GetOrDefault<object?>("NullRef", new object());
-        Assert.Null(gotNullDefault);
+        await Assert.That(gotNullDefault).IsNull();
     }
 
 
-    [Fact]
-    public void TypedAccessors_Throw_After_Dispose()
+    [Test]
+    public async Task TypedAccessors_Throw_After_Dispose()
     {
         var host = new object();
         var bag = host.SideDataBag();
         bag["X"] = 1;
         bag.Dispose();
 
-        Assert.Throws<ObjectDisposedException>(() => bag.TryGet("X", out object? _));
-        Assert.Throws<ObjectDisposedException>(() => bag.GetOrDefault<object>("X"));
+        await Assert.That(() => bag.TryGet("X", out object? _)).ThrowsExactly<ObjectDisposedException>();
+        await Assert.That(() => bag.GetOrDefault<object>("X")).ThrowsExactly<ObjectDisposedException>();
     }
 
 
-    [Fact]
-    public void Remove_DoesNotDispose_ByDefault_But_Disposes_When_Requested()
+    [Test]
+    public async Task Remove_DoesNotDispose_ByDefault_But_Disposes_When_Requested()
     {
         var host = new object();
         var bag = host.SideDataBag();
@@ -73,24 +74,24 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
         bag["A"] = async;
 
         // Remove without disposal should not dispose and should untrack
-        Assert.True(bag.Remove("S"));
-        Assert.False(sync.Disposed);
+        await Assert.That(bag.Remove("S")).IsTrue();
+        await Assert.That(sync.Disposed).IsFalse();
 
         // Removing missing returns false
-        Assert.False(bag.Remove("Missing"));
+        await Assert.That(bag.Remove("Missing")).IsFalse();
 
         // Remove with disposal should dispose
-        Assert.True(bag.Remove("A", disposeMember: true));
-        Assert.True(async.Disposed);
+        await Assert.That(bag.Remove("A", disposeMember: true)).IsTrue();
+        await Assert.That(async.Disposed).IsTrue();
 
         // Disposing bag afterwards should not touch already-removed items
         bag.Dispose();
-        Assert.False(sync.Disposed); // still not disposed because it was untracked before bag disposal
+        await Assert.That(sync.Disposed).IsFalse(); // still not disposed because it was untracked before bag disposal
     }
 
 
-    [Fact]
-    public void Clear_Removes_All_Members_And_Optionally_Disposes()
+    [Test]
+    public async Task Clear_Removes_All_Members_And_Optionally_Disposes()
     {
         var host = new object();
         var bag = host.SideDataBag();
@@ -105,14 +106,14 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
 
         // Clear with no disposal
         bag.Clear();
-        Assert.False(s1.Disposed);
-        Assert.False(s2.Disposed);
-        Assert.False(a1.Disposed);
+        await Assert.That(s1.Disposed).IsFalse();
+        await Assert.That(s2.Disposed).IsFalse();
+        await Assert.That(a1.Disposed).IsFalse();
 
         // After clear, members should be gone
-        Assert.Null(bag["s1"]);
-        Assert.Null(bag["s2"]);
-        Assert.Null(bag["a1"]);
+        await Assert.That(bag["s1"]).IsNull();
+        await Assert.That(bag["s2"]).IsNull();
+        await Assert.That(bag["a1"]).IsNull();
 
         // Re-add and clear with disposal
         bag["s1"] = s1;
@@ -120,14 +121,14 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
         bag["a1"] = a1;
 
         bag.Clear(disposeMembers: true);
-        Assert.True(s1.Disposed);
-        Assert.True(s2.Disposed);
-        Assert.True(a1.Disposed);
+        await Assert.That(s1.Disposed).IsTrue();
+        await Assert.That(s2.Disposed).IsTrue();
+        await Assert.That(a1.Disposed).IsTrue();
     }
 
 
-    [Fact]
-    public void DisposeOnReplace_DisposesOldValue_WhenReplaced()
+    [Test]
+    public async Task DisposeOnReplace_DisposesOldValue_WhenReplaced()
     {
         var host = new object();
         var bag = host.SideDataBag(disposeOnReplace: true);
@@ -136,21 +137,21 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
         var d2 = new TestDisposable();
 
         bag["Item"] = d1;
-        Assert.False(d1.Disposed);
+        await Assert.That(d1.Disposed).IsFalse();
 
         // Replace d1 with d2 - d1 should be disposed
         bag["Item"] = d2;
-        Assert.True(d1.Disposed);
-        Assert.False(d2.Disposed);
+        await Assert.That(d1.Disposed).IsTrue();
+        await Assert.That(d2.Disposed).IsFalse();
 
         // Dispose the bag - d2 should be disposed
         bag.Dispose();
-        Assert.True(d2.Disposed);
+        await Assert.That(d2.Disposed).IsTrue();
     }
 
 
-    [Fact]
-    public void DisposeOnReplace_Mismatch_Throws()
+    [Test]
+    public async Task DisposeOnReplace_Mismatch_Throws()
     {
         var host = new object();
 
@@ -158,13 +159,13 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
         var bag1 = host.SideDataBag(disposeOnReplace: false);
 
         // Second call with disposeOnReplace: true should throw
-        var ex = Assert.Throws<InvalidOperationException>(() => host.SideDataBag(disposeOnReplace: true));
-        Assert.Contains("disposeOnReplace=False", ex.Message);
-        Assert.Contains("disposeOnReplace=True", ex.Message);
+        var ex = await Assert.That(() => host.SideDataBag(disposeOnReplace: true)).ThrowsExactly<InvalidOperationException>();
+        await Assert.That(ex!.Message).Contains("disposeOnReplace=False");
+        await Assert.That(ex!.Message).Contains("disposeOnReplace=True");
     }
 
 
-    [Fact]
+    [Test]
     public async Task DisposeAsync_DisposesAllTrackedMembers()
     {
         var host = new object();
@@ -178,13 +179,13 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
 
         await bag.DisposeAsync();
 
-        Assert.True(sync.Disposed);
-        Assert.True(async.Disposed);
+        await Assert.That(sync.Disposed).IsTrue();
+        await Assert.That(async.Disposed).IsTrue();
     }
 
 
-    [Fact]
-    public void DualDisposable_TrackedOnlyOnce_AndDisposedOnce()
+    [Test]
+    public async Task DualDisposable_TrackedOnlyOnce_AndDisposedOnce()
     {
         var host = new object();
         var bag = host.SideDataBag();
@@ -196,13 +197,13 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
         bag.Dispose();
 
         // Should be disposed via async path (preferred), not both
-        Assert.Equal(0, dual.SyncDisposeCount);
-        Assert.Equal(1, dual.AsyncDisposeCount);
+        await Assert.That(dual.SyncDisposeCount).IsEqualTo(0);
+        await Assert.That(dual.AsyncDisposeCount).IsEqualTo(1);
     }
 
 
-    [Fact]
-    public void TypedIndexer_Set_And_Get_Works()
+    [Test]
+    public async Task TypedIndexer_Set_And_Get_Works()
     {
         var host = new object();
         var bag = host.SideDataBag();
@@ -210,15 +211,15 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
         var value = new object();
         bag["key"] = value;
         var read = bag["key"];
-        Assert.Same(value, read);
+        await Assert.That(read).IsSameReferenceAs(value);
 
         // Non-existent key returns null
-        Assert.Null(bag["missing"]);
+        await Assert.That(bag["missing"]).IsNull();
     }
 
 
-    [Fact]
-    public void GetDynamicMemberNames_ReturnsCurrentKeys()
+    [Test]
+    public async Task GetDynamicMemberNames_ReturnsCurrentKeys()
     {
         var host = new object();
         var bag = host.SideDataBag();
@@ -227,19 +228,19 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
         bag["Second"] = 2;
 
         var names = bag.GetDynamicMemberNames().ToList();
-        Assert.Contains("First", names);
-        Assert.Contains("Second", names);
-        Assert.Equal(2, names.Count);
+        await Assert.That(names).Contains("First");
+        await Assert.That(names).Contains("Second");
+        await Assert.That(names.Count).IsEqualTo(2);
 
         // Clear and verify empty
         bag.Clear();
         var emptyNames = bag.GetDynamicMemberNames().ToList();
-        Assert.Empty(emptyNames);
+        await Assert.That(emptyNames).IsEmpty();
     }
 
 
-    [Fact]
-    public void GetDynamicMemberNames_ThrowsAfterDispose()
+    [Test]
+    public async Task GetDynamicMemberNames_ThrowsAfterDispose()
     {
         var host = new object();
         var bag = host.SideDataBag();
@@ -247,15 +248,15 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
         bag["X"] = 1;
         bag.Dispose();
 
-        Assert.Throws<ObjectDisposedException>(() => bag.GetDynamicMemberNames().ToList());
+        await Assert.That(() => bag.GetDynamicMemberNames().ToList()).ThrowsExactly<ObjectDisposedException>();
     }
 
 
     #region Thread Safety Tests
 
-    [Fact]
-    [Trait("Category", "ThreadSafety")]
-    public void SideDataBag_Concurrent_Read_Write_Same_Keys()
+    [Test]
+    [Property("Category", "ThreadSafety")]
+    public async Task SideDataBag_Concurrent_Read_Write_Same_Keys()
     {
         var host = new object();
         var bag = host.SideDataBag();
@@ -289,12 +290,12 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
             }
         });
 
-        Assert.Empty(exceptions);
+        await Assert.That(exceptions).IsEmpty();
     }
 
-    [Fact]
-    [Trait("Category", "ThreadSafety")]
-    public void SideDataBag_Concurrent_Add_Different_Keys()
+    [Test]
+    [Property("Category", "ThreadSafety")]
+    public async Task SideDataBag_Concurrent_Add_Different_Keys()
     {
         var host = new object();
         var bag = host.SideDataBag();
@@ -312,18 +313,18 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
             }
         });
 
-        Assert.Empty(exceptions);
+        await Assert.That(exceptions).IsEmpty();
 
         // Verify all keys were added
         for (int i = 0; i < 100; i++)
         {
-            Assert.True(bag.TryGet<int>($"key{i}", out var value));
-            Assert.Equal(i, value);
+            await Assert.That(bag.TryGet<int>($"key{i}", out var value)).IsTrue();
+            await Assert.That(value).IsEqualTo(i);
         }
     }
 
-    [Fact]
-    [Trait("Category", "ThreadSafety")]
+    [Test]
+    [Property("Category", "ThreadSafety")]
     public async Task SideDataBag_Concurrent_Dispose_While_Writing()
     {
         var host = new object();
@@ -347,7 +348,7 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
             {
                 exceptions.Add(ex);
             }
-        }, TestContext.Current.CancellationToken);
+        }, TestContext.Current!.Execution.CancellationToken);
 
         var disposer = Task.Run(() =>
         {
@@ -361,17 +362,20 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
             {
                 exceptions.Add(ex);
             }
-        }, TestContext.Current.CancellationToken);
+        }, TestContext.Current!.Execution.CancellationToken);
 
         await Task.WhenAll(writer, disposer);
 
         // Either write succeeded or got ObjectDisposedException - both are valid
-        Assert.All(exceptions, ex => Assert.IsType<ObjectDisposedException>(ex));
+        foreach (var ex in exceptions)
+        {
+            await Assert.That(ex).IsTypeOf<ObjectDisposedException>();
+        }
     }
 
-    [Fact]
-    [Trait("Category", "ThreadSafety")]
-    public void SideDataBag_Concurrent_Remove_Same_Keys()
+    [Test]
+    [Property("Category", "ThreadSafety")]
+    public async Task SideDataBag_Concurrent_Remove_Same_Keys()
     {
         var host = new object();
         var bag = host.SideDataBag();
@@ -391,18 +395,18 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
         });
 
         // Only 10 removals should succeed (one per key)
-        Assert.Equal(10, removeResults.Count(r => r));
+        await Assert.That(removeResults.Count(r => r)).IsEqualTo(10);
 
         // All keys should be gone
         for (int i = 0; i < 10; i++)
         {
-            Assert.Null(bag[$"key{i}"]);
+            await Assert.That(bag[$"key{i}"]).IsNull();
         }
     }
 
-    [Fact]
-    [Trait("Category", "ThreadSafety")]
-    public void SideDataBag_Concurrent_Clear()
+    [Test]
+    [Property("Category", "ThreadSafety")]
+    public async Task SideDataBag_Concurrent_Clear()
     {
         var host = new object();
         var bag = host.SideDataBag();
@@ -426,11 +430,11 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
             }
         });
 
-        Assert.Empty(exceptions);
+        await Assert.That(exceptions).IsEmpty();
 
         // All members should be cleared
         var names = bag.GetDynamicMemberNames().ToList();
-        Assert.Empty(names);
+        await Assert.That(names).IsEmpty();
     }
 
     #endregion
@@ -438,9 +442,9 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
 
     #region Dispose Idempotency Tests
 
-    [Fact]
-    [Trait("Category", "Disposal")]
-    public void Dispose_Called_Twice_Does_Not_Double_Dispose()
+    [Test]
+    [Property("Category", "Disposal")]
+    public async Task Dispose_Called_Twice_Does_Not_Double_Dispose()
     {
         var host = new object();
         var bag = host.SideDataBag();
@@ -451,11 +455,11 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
         bag.Dispose();
         bag.Dispose();
 
-        Assert.Equal(1, disposable.DisposeCount);
+        await Assert.That(disposable.DisposeCount).IsEqualTo(1);
     }
 
-    [Fact]
-    [Trait("Category", "Disposal")]
+    [Test]
+    [Property("Category", "Disposal")]
     public async Task DisposeAsync_Called_Twice_Does_Not_Double_Dispose()
     {
         var host = new object();
@@ -467,11 +471,11 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
         await bag.DisposeAsync();
         await bag.DisposeAsync();
 
-        Assert.Equal(1, disposable.DisposeCount);
+        await Assert.That(disposable.DisposeCount).IsEqualTo(1);
     }
 
-    [Fact]
-    [Trait("Category", "Disposal")]
+    [Test]
+    [Property("Category", "Disposal")]
     public async Task Dispose_Then_DisposeAsync_Does_Not_Double_Dispose()
     {
         var host = new object();
@@ -485,12 +489,12 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
         bag.Dispose();
         await bag.DisposeAsync();
 
-        Assert.Equal(1, sync.DisposeCount);
-        Assert.Equal(1, async.DisposeCount);
+        await Assert.That(sync.DisposeCount).IsEqualTo(1);
+        await Assert.That(async.DisposeCount).IsEqualTo(1);
     }
 
-    [Fact]
-    [Trait("Category", "Disposal")]
+    [Test]
+    [Property("Category", "Disposal")]
     public async Task DisposeAsync_Then_Dispose_Does_Not_Double_Dispose()
     {
         var host = new object();
@@ -504,8 +508,8 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
         await bag.DisposeAsync();
         bag.Dispose();
 
-        Assert.Equal(1, sync.DisposeCount);
-        Assert.Equal(1, async.DisposeCount);
+        await Assert.That(sync.DisposeCount).IsEqualTo(1);
+        await Assert.That(async.DisposeCount).IsEqualTo(1);
     }
 
     #endregion
@@ -513,51 +517,51 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
 
     #region ObjectDisposedException Coverage
 
-    [Fact]
-    [Trait("Category", "Disposal")]
-    public void Remove_Throws_After_Dispose()
+    [Test]
+    [Property("Category", "Disposal")]
+    public async Task Remove_Throws_After_Dispose()
     {
         var host = new object();
         var bag = host.SideDataBag();
         bag["X"] = 1;
         bag.Dispose();
 
-        Assert.Throws<ObjectDisposedException>(() => bag.Remove("X"));
+        await Assert.That(() => bag.Remove("X")).ThrowsExactly<ObjectDisposedException>();
     }
 
-    [Fact]
-    [Trait("Category", "Disposal")]
-    public void Clear_Throws_After_Dispose()
+    [Test]
+    [Property("Category", "Disposal")]
+    public async Task Clear_Throws_After_Dispose()
     {
         var host = new object();
         var bag = host.SideDataBag();
         bag["X"] = 1;
         bag.Dispose();
 
-        Assert.Throws<ObjectDisposedException>(() => bag.Clear());
+        await Assert.That(() => bag.Clear()).ThrowsExactly<ObjectDisposedException>();
     }
 
-    [Fact]
-    [Trait("Category", "Disposal")]
-    public void TypedIndexer_Get_Throws_After_Dispose()
+    [Test]
+    [Property("Category", "Disposal")]
+    public async Task TypedIndexer_Get_Throws_After_Dispose()
     {
         var host = new object();
         var bag = host.SideDataBag();
         bag["X"] = 1;
         bag.Dispose();
 
-        Assert.Throws<ObjectDisposedException>(() => { var _ = bag["X"]; });
+        await Assert.That(() => { var _ = bag["X"]; }).ThrowsExactly<ObjectDisposedException>();
     }
 
-    [Fact]
-    [Trait("Category", "Disposal")]
-    public void TypedIndexer_Set_Throws_After_Dispose()
+    [Test]
+    [Property("Category", "Disposal")]
+    public async Task TypedIndexer_Set_Throws_After_Dispose()
     {
         var host = new object();
         var bag = host.SideDataBag();
         bag.Dispose();
 
-        Assert.Throws<ObjectDisposedException>(() => bag["X"] = 1);
+        await Assert.That(() => bag["X"] = 1).ThrowsExactly<ObjectDisposedException>();
     }
 
     #endregion
@@ -565,56 +569,56 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
 
     #region TryGet Value Type Tests
 
-    [Fact]
-    [Trait("Category", "TypedAccessors")]
-    public void TryGet_ValueType_Success()
+    [Test]
+    [Property("Category", "TypedAccessors")]
+    public async Task TryGet_ValueType_Success()
     {
         var host = new object();
         var bag = host.SideDataBag();
 
         bag["number"] = 42;
 
-        Assert.True(bag.TryGet<int>("number", out var value));
-        Assert.Equal(42, value);
+        await Assert.That(bag.TryGet<int>("number", out var value)).IsTrue();
+        await Assert.That(value).IsEqualTo(42);
     }
 
-    [Fact]
-    [Trait("Category", "TypedAccessors")]
-    public void TryGet_ValueType_WrongType_Returns_False()
+    [Test]
+    [Property("Category", "TypedAccessors")]
+    public async Task TryGet_ValueType_WrongType_Returns_False()
     {
         var host = new object();
         var bag = host.SideDataBag();
 
         bag["number"] = 42;
 
-        Assert.False(bag.TryGet<long>("number", out var value));
-        Assert.Equal(default, value);
+        await Assert.That(bag.TryGet<long>("number", out var value)).IsFalse();
+        await Assert.That(value).IsEqualTo(default);
     }
 
-    [Fact]
-    [Trait("Category", "TypedAccessors")]
-    public void TryGet_NullableValueType_Success()
+    [Test]
+    [Property("Category", "TypedAccessors")]
+    public async Task TryGet_NullableValueType_Success()
     {
         var host = new object();
         var bag = host.SideDataBag();
 
         bag["number"] = (int?)42;
 
-        Assert.True(bag.TryGet<int?>("number", out var value));
-        Assert.Equal(42, value);
+        await Assert.That(bag.TryGet<int?>("number", out var value)).IsTrue();
+        await Assert.That(value).IsEqualTo(42);
     }
 
-    [Fact]
-    [Trait("Category", "TypedAccessors")]
-    public void TryGet_NullableValueType_Null_Success()
+    [Test]
+    [Property("Category", "TypedAccessors")]
+    public async Task TryGet_NullableValueType_Null_Success()
     {
         var host = new object();
         var bag = host.SideDataBag();
 
         bag["number"] = (int?)null;
 
-        Assert.True(bag.TryGet<int?>("number", out var value));
-        Assert.Null(value);
+        await Assert.That(bag.TryGet<int?>("number", out var value)).IsTrue();
+        await Assert.That(value).IsNull();
     }
 
     #endregion
@@ -622,9 +626,9 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
 
     #region GetOrDefault with Null Edge Cases
 
-    [Fact]
-    [Trait("Category", "TypedAccessors")]
-    public void GetOrDefault_NullValue_NonNullableValueType_Returns_Default()
+    [Test]
+    [Property("Category", "TypedAccessors")]
+    public async Task GetOrDefault_NullValue_NonNullableValueType_Returns_Default()
     {
         var host = new object();
         var bag = host.SideDataBag();
@@ -632,12 +636,12 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
         bag["value"] = null;
 
         var result = bag.GetOrDefault<int>("value", 99);
-        Assert.Equal(99, result);
+        await Assert.That(result).IsEqualTo(99);
     }
 
-    [Fact]
-    [Trait("Category", "TypedAccessors")]
-    public void GetOrDefault_NullValue_NullableValueType_Returns_Null()
+    [Test]
+    [Property("Category", "TypedAccessors")]
+    public async Task GetOrDefault_NullValue_NullableValueType_Returns_Null()
     {
         var host = new object();
         var bag = host.SideDataBag();
@@ -645,7 +649,7 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
         bag["value"] = null;
 
         var result = bag.GetOrDefault<int?>("value", 99);
-        Assert.Null(result);
+        await Assert.That(result).IsNull();
     }
 
     #endregion
@@ -653,9 +657,9 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
 
     #region Clear Edge Cases
 
-    [Fact]
-    [Trait("Category", "Clear")]
-    public void Clear_On_Empty_Bag_Does_Not_Throw()
+    [Test]
+    [Property("Category", "Clear")]
+    public async Task Clear_On_Empty_Bag_Does_Not_Throw()
     {
         var host = new object();
         var bag = host.SideDataBag();
@@ -665,12 +669,12 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
         bag.Clear(disposeMembers: true);
 
         var names = bag.GetDynamicMemberNames().ToList();
-        Assert.Empty(names);
+        await Assert.That(names).IsEmpty();
     }
 
-    [Fact]
-    [Trait("Category", "Clear")]
-    public void Clear_Then_Dispose_Does_Not_Double_Dispose()
+    [Test]
+    [Property("Category", "Clear")]
+    public async Task Clear_Then_Dispose_Does_Not_Double_Dispose()
     {
         var host = new object();
         var bag = host.SideDataBag();
@@ -682,8 +686,8 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
         bag["d2"] = d2;
 
         bag.Clear(disposeMembers: true);
-        Assert.True(d1.Disposed);
-        Assert.True(d2.Disposed);
+        await Assert.That(d1.Disposed).IsTrue();
+        await Assert.That(d2.Disposed).IsTrue();
 
         // Reset counters via new instances to verify Dispose doesn't try to dispose again
         // (can't reset the counter on already-disposed items, but we can check they don't increment)
@@ -693,8 +697,8 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
         bag.Dispose();
 
         // Counts should not increase because items were already untracked
-        Assert.Equal(initialD1Count, d1.DisposeCount);
-        Assert.Equal(initialD2Count, d2.DisposeCount);
+        await Assert.That(d1.DisposeCount).IsEqualTo(initialD1Count);
+        await Assert.That(d2.DisposeCount).IsEqualTo(initialD2Count);
     }
 
     #endregion
@@ -702,9 +706,9 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
 
     #region GetOrAdd Tests
 
-    [Fact]
-    [Trait("Category", "TypedAccessors")]
-    public void GetOrAdd_Creates_And_Stores_When_Missing()
+    [Test]
+    [Property("Category", "TypedAccessors")]
+    public async Task GetOrAdd_Creates_And_Stores_When_Missing()
     {
         var host = new object();
         var bag = host.SideDataBag();
@@ -712,15 +716,15 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
         var calls = 0;
         var result = bag.GetOrAdd("key", () => { calls++; return 42; });
 
-        Assert.Equal(42, result);
-        Assert.Equal(1, calls);
-        Assert.True(bag.TryGet<int>("key", out var stored));
-        Assert.Equal(42, stored);
+        await Assert.That(result).IsEqualTo(42);
+        await Assert.That(calls).IsEqualTo(1);
+        await Assert.That(bag.TryGet<int>("key", out var stored)).IsTrue();
+        await Assert.That(stored).IsEqualTo(42);
     }
 
-    [Fact]
-    [Trait("Category", "TypedAccessors")]
-    public void GetOrAdd_Returns_Existing_Without_Invoking_Factory()
+    [Test]
+    [Property("Category", "TypedAccessors")]
+    public async Task GetOrAdd_Returns_Existing_Without_Invoking_Factory()
     {
         var host = new object();
         var bag = host.SideDataBag();
@@ -730,25 +734,25 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
         var calls = 0;
         var result = bag.GetOrAdd("key", () => { calls++; return 99; });
 
-        Assert.Equal(7, result);
-        Assert.Equal(0, calls);
+        await Assert.That(result).IsEqualTo(7);
+        await Assert.That(calls).IsEqualTo(0);
     }
 
-    [Fact]
-    [Trait("Category", "TypedAccessors")]
-    public void GetOrAdd_Existing_WrongType_Throws_InvalidCast()
+    [Test]
+    [Property("Category", "TypedAccessors")]
+    public async Task GetOrAdd_Existing_WrongType_Throws_InvalidCast()
     {
         var host = new object();
         var bag = host.SideDataBag();
 
         bag["key"] = "a string";
 
-        Assert.Throws<InvalidCastException>(() => bag.GetOrAdd<int>("key", () => 1));
+        await Assert.That(() => bag.GetOrAdd<int>("key", () => 1)).ThrowsExactly<InvalidCastException>();
     }
 
-    [Fact]
-    [Trait("Category", "TypedAccessors")]
-    public void GetOrAdd_Existing_Null_Returns_Default_For_RefType()
+    [Test]
+    [Property("Category", "TypedAccessors")]
+    public async Task GetOrAdd_Existing_Null_Returns_Default_For_RefType()
     {
         var host = new object();
         var bag = host.SideDataBag();
@@ -758,35 +762,35 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
         var calls = 0;
         var result = bag.GetOrAdd<object?>("key", () => { calls++; return new object(); });
 
-        Assert.Null(result);
-        Assert.Equal(0, calls);
+        await Assert.That(result).IsNull();
+        await Assert.That(calls).IsEqualTo(0);
     }
 
-    [Fact]
-    [Trait("Category", "TypedAccessors")]
-    public void GetOrAdd_Null_Arguments_Throw()
+    [Test]
+    [Property("Category", "TypedAccessors")]
+    public async Task GetOrAdd_Null_Arguments_Throw()
     {
         var host = new object();
         var bag = host.SideDataBag();
 
-        Assert.Throws<ArgumentNullException>(() => bag.GetOrAdd<int>(null!, () => 1));
-        Assert.Throws<ArgumentNullException>(() => bag.GetOrAdd<int>("key", null!));
+        await Assert.That(() => bag.GetOrAdd<int>(null!, () => 1)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => bag.GetOrAdd<int>("key", null!)).ThrowsExactly<ArgumentNullException>();
     }
 
-    [Fact]
-    [Trait("Category", "Disposal")]
-    public void GetOrAdd_Throws_After_Dispose()
+    [Test]
+    [Property("Category", "Disposal")]
+    public async Task GetOrAdd_Throws_After_Dispose()
     {
         var host = new object();
         var bag = host.SideDataBag();
         bag.Dispose();
 
-        Assert.Throws<ObjectDisposedException>(() => bag.GetOrAdd("key", () => 1));
+        await Assert.That(() => bag.GetOrAdd("key", () => 1)).ThrowsExactly<ObjectDisposedException>();
     }
 
-    [Fact]
-    [Trait("Category", "Disposal")]
-    public void GetOrAdd_Disposes_Orphan_When_Losing_Race()
+    [Test]
+    [Property("Category", "Disposal")]
+    public async Task GetOrAdd_Disposes_Orphan_When_Losing_Race()
     {
         var host = new object();
         var bag = host.SideDataBag();
@@ -802,33 +806,33 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
             return loser;
         });
 
-        Assert.Same(winner, result);
-        Assert.False(winner.Disposed);
-        Assert.True(loser.Disposed);
-        Assert.Same(winner, bag["key"]);
+        await Assert.That(result).IsSameReferenceAs(winner);
+        await Assert.That(winner.Disposed).IsFalse();
+        await Assert.That(loser.Disposed).IsTrue();
+        await Assert.That(bag["key"]).IsSameReferenceAs(winner);
     }
 
-    [Fact]
-    [Trait("Category", "Disposal")]
-    public void GetOrAdd_Disposes_Orphan_When_Disposed_During_Factory()
+    [Test]
+    [Property("Category", "Disposal")]
+    public async Task GetOrAdd_Disposes_Orphan_When_Disposed_During_Factory()
     {
         var host = new object();
         var bag = host.SideDataBag();
 
         var orphan = new TestDisposable();
 
-        Assert.Throws<ObjectDisposedException>(() => bag.GetOrAdd("key", () =>
+        await Assert.That(() => bag.GetOrAdd("key", () =>
         {
             bag.Dispose();
             return orphan;
-        }));
+        })).ThrowsExactly<ObjectDisposedException>();
 
-        Assert.True(orphan.Disposed);
+        await Assert.That(orphan.Disposed).IsTrue();
     }
 
-    [Fact]
-    [Trait("Category", "ThreadSafety")]
-    public void GetOrAdd_Concurrent_Same_Key_Returns_Single_Winner()
+    [Test]
+    [Property("Category", "ThreadSafety")]
+    public async Task GetOrAdd_Concurrent_Same_Key_Returns_Single_Winner()
     {
         var host = new object();
         var bag = host.SideDataBag();
@@ -847,12 +851,15 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
         });
 
         var winner = bag.GetOrDefault<int>("key");
-        Assert.All(results, r => Assert.Equal(winner, r));
+        foreach (var r in results)
+        {
+            await Assert.That(r).IsEqualTo(winner);
+        }
     }
 
-    [Fact]
-    [Trait("Category", "TypedAccessors")]
-    public void GetOrAdd_With_Lazy_Initializes_Exactly_Once()
+    [Test]
+    [Property("Category", "TypedAccessors")]
+    public async Task GetOrAdd_With_Lazy_Initializes_Exactly_Once()
     {
         var host = new object();
         var bag = host.SideDataBag();
@@ -867,27 +874,30 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
             values[i] = lazy.Value;
         });
 
-        Assert.All(values, v => Assert.Equal(5, v));
-        Assert.Equal(1, factoryCalls);
+        foreach (var v in values)
+        {
+            await Assert.That(v).IsEqualTo(5);
+        }
+        await Assert.That(factoryCalls).IsEqualTo(1);
     }
 
-    [Fact]
-    [Trait("Category", "TypedAccessors")]
-    public void GetOrAdd_Eager_Stores_And_Returns_When_Missing()
+    [Test]
+    [Property("Category", "TypedAccessors")]
+    public async Task GetOrAdd_Eager_Stores_And_Returns_When_Missing()
     {
         var host = new object();
         var bag = host.SideDataBag();
 
         var result = bag.GetOrAdd("key", 42);
 
-        Assert.Equal(42, result);
-        Assert.True(bag.TryGet<int>("key", out var stored));
-        Assert.Equal(42, stored);
+        await Assert.That(result).IsEqualTo(42);
+        await Assert.That(bag.TryGet<int>("key", out var stored)).IsTrue();
+        await Assert.That(stored).IsEqualTo(42);
     }
 
-    [Fact]
-    [Trait("Category", "TypedAccessors")]
-    public void GetOrAdd_Eager_Returns_Existing()
+    [Test]
+    [Property("Category", "TypedAccessors")]
+    public async Task GetOrAdd_Eager_Returns_Existing()
     {
         var host = new object();
         var bag = host.SideDataBag();
@@ -896,45 +906,45 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
 
         var result = bag.GetOrAdd("key", 99);
 
-        Assert.Equal(7, result);
+        await Assert.That(result).IsEqualTo(7);
     }
 
-    [Fact]
-    [Trait("Category", "TypedAccessors")]
-    public void GetOrAdd_Eager_Existing_WrongType_Throws_InvalidCast()
+    [Test]
+    [Property("Category", "TypedAccessors")]
+    public async Task GetOrAdd_Eager_Existing_WrongType_Throws_InvalidCast()
     {
         var host = new object();
         var bag = host.SideDataBag();
 
         bag["key"] = "a string";
 
-        Assert.Throws<InvalidCastException>(() => bag.GetOrAdd("key", 1));
+        await Assert.That(() => bag.GetOrAdd("key", 1)).ThrowsExactly<InvalidCastException>();
     }
 
-    [Fact]
-    [Trait("Category", "TypedAccessors")]
-    public void GetOrAdd_Eager_Null_Name_Throws()
+    [Test]
+    [Property("Category", "TypedAccessors")]
+    public async Task GetOrAdd_Eager_Null_Name_Throws()
     {
         var host = new object();
         var bag = host.SideDataBag();
 
-        Assert.Throws<ArgumentNullException>(() => bag.GetOrAdd(null!, 1));
+        await Assert.That(() => bag.GetOrAdd(null!, 1)).ThrowsExactly<ArgumentNullException>();
     }
 
-    [Fact]
-    [Trait("Category", "Disposal")]
-    public void GetOrAdd_Eager_Throws_After_Dispose()
+    [Test]
+    [Property("Category", "Disposal")]
+    public async Task GetOrAdd_Eager_Throws_After_Dispose()
     {
         var host = new object();
         var bag = host.SideDataBag();
         bag.Dispose();
 
-        Assert.Throws<ObjectDisposedException>(() => bag.GetOrAdd("key", 1));
+        await Assert.That(() => bag.GetOrAdd("key", 1)).ThrowsExactly<ObjectDisposedException>();
     }
 
-    [Fact]
-    [Trait("Category", "Disposal")]
-    public void GetOrAdd_Eager_Does_Not_Dispose_Losing_Value()
+    [Test]
+    [Property("Category", "Disposal")]
+    public async Task GetOrAdd_Eager_Does_Not_Dispose_Losing_Value()
     {
         var host = new object();
         var bag = host.SideDataBag();
@@ -945,14 +955,14 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
 
         var result = bag.GetOrAdd("key", loser);
 
-        Assert.Same(winner, result);
-        Assert.False(loser.Disposed);
-        Assert.False(winner.Disposed);
+        await Assert.That(result).IsSameReferenceAs(winner);
+        await Assert.That(loser.Disposed).IsFalse();
+        await Assert.That(winner.Disposed).IsFalse();
     }
 
-    [Fact]
-    [Trait("Category", "Disposal")]
-    public void GetOrAdd_Eager_Tracks_Stored_Disposable()
+    [Test]
+    [Property("Category", "Disposal")]
+    public async Task GetOrAdd_Eager_Tracks_Stored_Disposable()
     {
         var host = new object();
         var bag = host.SideDataBag();
@@ -961,7 +971,7 @@ public class SideDataBagTests(TestDataFixture testDataFixture) : IClassFixture<T
         bag.GetOrAdd("key", disposable);
 
         bag.Dispose();
-        Assert.True(disposable.Disposed);
+        await Assert.That(disposable.Disposed).IsTrue();
     }
 
     #endregion

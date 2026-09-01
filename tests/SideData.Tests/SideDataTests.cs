@@ -1,32 +1,33 @@
-﻿using System.Dynamic;
+using System.Dynamic;
 
 using SideData.Fixtures;
 using SideData.TestData;
 
 namespace SideData;
 
-public class SideDataTests(TestDataFixture testDataFixture) : IClassFixture<TestDataFixture>
+[ClassDataSource<TestDataFixture>(Shared = SharedType.PerClass)]
+public class SideDataTests(TestDataFixture testDataFixture)
 {
-    [Fact]
-    public void SideData_ForEachHostObject_IsUniquePerHostObject()
+    [Test]
+    public async Task SideData_ForEachHostObject_IsUniquePerHostObject()
     {
         var user1 = Fixture.UserFaker.Generate();
         var user1FirstSideData = user1.SideData();
         var user1SecondSideData = user1.SideData();
-        Assert.Same(user1FirstSideData, user1SecondSideData);
+        await Assert.That((object)user1SecondSideData).IsSameReferenceAs((object)user1FirstSideData);
 
         var user2 = Fixture.UserFaker.Generate();
         var user2FirstSideData = user2.SideData();
         var user2SecondSideData = user2.SideData();
-        Assert.Same(user2FirstSideData, user2SecondSideData);
+        await Assert.That((object)user2SecondSideData).IsSameReferenceAs((object)user2FirstSideData);
 
         // SideData for user1 should be different to the SideData for user2
-        Assert.NotSame(user1FirstSideData, user2FirstSideData);
+        await Assert.That((object)user2FirstSideData).IsNotSameReferenceAs((object)user1FirstSideData);
     }
 
 
-    [Fact]
-    public void SetAndGet_MultipleSideData_ReturnsSameValues()
+    [Test]
+    public async Task SetAndGet_MultipleSideData_ReturnsSameValues()
     {
         var user = Fixture.UserFaker.Generate();
         var primaryContact = Fixture.ContactDataFaker.Generate();
@@ -35,14 +36,14 @@ public class SideDataTests(TestDataFixture testDataFixture) : IClassFixture<Test
         user.SideData().PrimaryContact = primaryContact;
         user.SideData().SecondaryContact = secondaryContact;
 
-        Assert.NotSame(primaryContact, secondaryContact);
-        Assert.Same(primaryContact, user.SideData().PrimaryContact);
-        Assert.Same(secondaryContact, user.SideData().SecondaryContact);
+        await Assert.That(secondaryContact).IsNotSameReferenceAs(primaryContact);
+        await Assert.That((object)user.SideData().PrimaryContact).IsSameReferenceAs(primaryContact);
+        await Assert.That((object)user.SideData().SecondaryContact).IsSameReferenceAs(secondaryContact);
     }
 
 
-    [Fact]
-    public void ExplicitDispose_DisposesTrackedMembers()
+    [Test]
+    public async Task ExplicitDispose_DisposesTrackedMembers()
     {
         var host = new object();
         dynamic bag = host.SideData();
@@ -56,16 +57,16 @@ public class SideDataTests(TestDataFixture testDataFixture) : IClassFixture<Test
         // Dispose the bag explicitly
         ((IDisposable)bag).Dispose();
 
-        Assert.True(sync.Disposed);
-        Assert.True(async.Disposed);
+        await Assert.That(sync.Disposed).IsTrue();
+        await Assert.That(async.Disposed).IsTrue();
 
         // Further operations on bag should throw ObjectDisposedException
-        Assert.Throws<ObjectDisposedException>(() => { var _ = bag.Sync; });
+        await Assert.That(() => { var _ = bag.Sync; }).ThrowsExactly<ObjectDisposedException>();
     }
 
-    
-    [Fact]
-    public void Finalizer_DisposesTrackedMembers_WhenHostIsCollected()
+
+    [Test]
+    public async Task Finalizer_DisposesTrackedMembers_WhenHostIsCollected()
     {
         var sync = new TestDisposable();
         var async = new TestAsyncDisposable();
@@ -75,7 +76,7 @@ public class SideDataTests(TestDataFixture testDataFixture) : IClassFixture<Test
 
         // Ensure host is collected
         ForceFullGc();
-        Assert.False(hostRef.IsAlive);
+        await Assert.That(hostRef.IsAlive).IsFalse();
 
         // Give finalizers a chance to run and Dispose the bag-owned members
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
@@ -84,11 +85,11 @@ public class SideDataTests(TestDataFixture testDataFixture) : IClassFixture<Test
             Thread.Sleep(10);
         }
 
-        Assert.True(sync.Disposed);
-        Assert.True(async.Disposed);
+        await Assert.That(sync.Disposed).IsTrue();
+        await Assert.That(async.Disposed).IsTrue();
     }
 
-    
+
     private static void CreateHostAndAttach(out WeakReference hostRef, TestDisposable sync, TestAsyncDisposable async)
     {
         var host = new object();
@@ -104,9 +105,9 @@ public class SideDataTests(TestDataFixture testDataFixture) : IClassFixture<Test
         GC.KeepAlive(bag); // ensure bag stays alive until method end
     }
 
-    
-    [Fact]
-    public void DynamicIndexer_Set_And_Get_StringKey_Works()
+
+    [Test]
+    public async Task DynamicIndexer_Set_And_Get_StringKey_Works()
     {
         var host = new object();
         dynamic dyn = host.SideData();
@@ -114,24 +115,24 @@ public class SideDataTests(TestDataFixture testDataFixture) : IClassFixture<Test
         var value = new object();
         dyn["key"] = value; // TrySetIndex
         var read = dyn["key"]; // TryGetIndex
-        Assert.Same(value, read);
+        await Assert.That((object)read).IsSameReferenceAs(value);
     }
 
-    
-    [Fact]
-    public void DynamicIndexer_InvalidKeyType_Throws()
+
+    [Test]
+    public async Task DynamicIndexer_InvalidKeyType_Throws()
     {
         var host = new object();
         dynamic dyn = host.SideData();
 
         // Using an int key should cause the dynamic binder to fail because TrySetIndex returns false
-        Assert.ThrowsAny<Exception>(() => dyn[123] = 5);
-        Assert.ThrowsAny<Exception>(() => { var _ = dyn[123]; });
+        await Assert.That(() => dyn[123] = 5).Throws<Exception>();
+        await Assert.That(() => { var _ = dyn[123]; }).Throws<Exception>();
     }
 
 
-    [Fact]
-    public void DisposeOnReplace_Mismatch_Throws()
+    [Test]
+    public async Task DisposeOnReplace_Mismatch_Throws()
     {
         var host = new object();
 
@@ -139,21 +140,21 @@ public class SideDataTests(TestDataFixture testDataFixture) : IClassFixture<Test
         var bag1 = host.SideData(disposeOnReplace: false);
 
         // Second call with disposeOnReplace: true should throw
-        var ex = Assert.Throws<InvalidOperationException>(() => host.SideData(disposeOnReplace: true));
-        Assert.Contains("disposeOnReplace=False", ex.Message);
-        Assert.Contains("disposeOnReplace=True", ex.Message);
+        var ex = await Assert.That(() => host.SideData(disposeOnReplace: true)).ThrowsExactly<InvalidOperationException>();
+        await Assert.That(ex!.Message).Contains("disposeOnReplace=False");
+        await Assert.That(ex!.Message).Contains("disposeOnReplace=True");
 
         // Same with typed API
         var host2 = new object();
         var bag2 = host2.SideDataBag(disposeOnReplace: true);
-        var ex2 = Assert.Throws<InvalidOperationException>(() => host2.SideDataBag(disposeOnReplace: false));
-        Assert.Contains("disposeOnReplace=True", ex2.Message);
-        Assert.Contains("disposeOnReplace=False", ex2.Message);
+        var ex2 = await Assert.That(() => host2.SideDataBag(disposeOnReplace: false)).ThrowsExactly<InvalidOperationException>();
+        await Assert.That(ex2!.Message).Contains("disposeOnReplace=True");
+        await Assert.That(ex2!.Message).Contains("disposeOnReplace=False");
     }
 
 
-    [Fact]
-    public void GetDynamicMemberNames_ReturnsCurrentKeys()
+    [Test]
+    public async Task GetDynamicMemberNames_ReturnsCurrentKeys()
     {
         var host = new object();
         dynamic dyn = host.SideData();
@@ -162,22 +163,22 @@ public class SideDataTests(TestDataFixture testDataFixture) : IClassFixture<Test
         dyn.Second = 2;
 
         var names = ((SideDataBag)dyn).GetDynamicMemberNames().ToList();
-        Assert.Contains("First", names);
-        Assert.Contains("Second", names);
-        Assert.Equal(2, names.Count);
+        await Assert.That(names).Contains("First");
+        await Assert.That(names).Contains("Second");
+        await Assert.That(names.Count).IsEqualTo(2);
 
         // Clear and verify empty
         ((SideDataBag)dyn).Clear();
         var emptyNames = ((SideDataBag)dyn).GetDynamicMemberNames().ToList();
-        Assert.Empty(emptyNames);
+        await Assert.That(emptyNames).IsEmpty();
     }
 
 
     #region DisposeOnReplace via Dynamic Paths
 
-    [Fact]
-    [Trait("Category", "Disposal")]
-    public void DisposeOnReplace_Via_TrySetMember_Disposes_Old_Value()
+    [Test]
+    [Property("Category", "Disposal")]
+    public async Task DisposeOnReplace_Via_TrySetMember_Disposes_Old_Value()
     {
         var host = new object();
         dynamic bag = host.SideData(disposeOnReplace: true);
@@ -186,17 +187,17 @@ public class SideDataTests(TestDataFixture testDataFixture) : IClassFixture<Test
         var d2 = new TestDisposable();
 
         bag.Item = d1;
-        Assert.False(d1.Disposed);
+        await Assert.That(d1.Disposed).IsFalse();
 
         // Replace via dynamic member set
         bag.Item = d2;
-        Assert.True(d1.Disposed);
-        Assert.False(d2.Disposed);
+        await Assert.That(d1.Disposed).IsTrue();
+        await Assert.That(d2.Disposed).IsFalse();
     }
 
-    [Fact]
-    [Trait("Category", "Disposal")]
-    public void DisposeOnReplace_Via_TrySetIndex_Disposes_Old_Value()
+    [Test]
+    [Property("Category", "Disposal")]
+    public async Task DisposeOnReplace_Via_TrySetIndex_Disposes_Old_Value()
     {
         var host = new object();
         dynamic bag = host.SideData(disposeOnReplace: true);
@@ -205,12 +206,12 @@ public class SideDataTests(TestDataFixture testDataFixture) : IClassFixture<Test
         var d2 = new TestDisposable();
 
         bag["key"] = d1;
-        Assert.False(d1.Disposed);
+        await Assert.That(d1.Disposed).IsFalse();
 
         // Replace via dynamic indexer set
         bag["key"] = d2;
-        Assert.True(d1.Disposed);
-        Assert.False(d2.Disposed);
+        await Assert.That(d1.Disposed).IsTrue();
+        await Assert.That(d2.Disposed).IsFalse();
     }
 
     #endregion
@@ -218,38 +219,38 @@ public class SideDataTests(TestDataFixture testDataFixture) : IClassFixture<Test
 
     #region ObjectDisposedException Coverage
 
-    [Fact]
-    [Trait("Category", "Disposal")]
-    public void DynamicIndexer_Get_Throws_After_Dispose()
+    [Test]
+    [Property("Category", "Disposal")]
+    public async Task DynamicIndexer_Get_Throws_After_Dispose()
     {
         var host = new object();
         dynamic bag = host.SideData();
         bag["X"] = 1;
         ((IDisposable)bag).Dispose();
 
-        Assert.Throws<ObjectDisposedException>(() => { var _ = bag["X"]; });
+        await Assert.That(() => { var _ = bag["X"]; }).ThrowsExactly<ObjectDisposedException>();
     }
 
-    [Fact]
-    [Trait("Category", "Disposal")]
-    public void DynamicIndexer_Set_Throws_After_Dispose()
+    [Test]
+    [Property("Category", "Disposal")]
+    public async Task DynamicIndexer_Set_Throws_After_Dispose()
     {
         var host = new object();
         dynamic bag = host.SideData();
         ((IDisposable)bag).Dispose();
 
-        Assert.Throws<ObjectDisposedException>(() => bag["X"] = 1);
+        await Assert.That(() => bag["X"] = 1).ThrowsExactly<ObjectDisposedException>();
     }
 
-    [Fact]
-    [Trait("Category", "Disposal")]
-    public void DynamicMember_Set_Throws_After_Dispose()
+    [Test]
+    [Property("Category", "Disposal")]
+    public async Task DynamicMember_Set_Throws_After_Dispose()
     {
         var host = new object();
         dynamic bag = host.SideData();
         ((IDisposable)bag).Dispose();
 
-        Assert.Throws<ObjectDisposedException>(() => bag.X = 1);
+        await Assert.That(() => bag.X = 1).ThrowsExactly<ObjectDisposedException>();
     }
 
     #endregion
@@ -257,29 +258,29 @@ public class SideDataTests(TestDataFixture testDataFixture) : IClassFixture<Test
 
     #region Custom bags
 
-    [Fact]
-    public void SideData_ReturnsCustomBag_AttachedViaSideDataAttachment()
+    [Test]
+    public async Task SideData_ReturnsCustomBag_AttachedViaSideDataAttachment()
     {
         var host = new object();
         var expando = new ExpandoObject();
         SideDataAttachment.GetOrAdd(host, () => (dynamic)expando);
 
-        Assert.Same(expando, (object)host.SideData());
+        await Assert.That((object)host.SideData()).IsSameReferenceAs(expando);
 
         dynamic bag = host.SideData();
         bag.Answer = 42;
-        Assert.Equal(42, (int)bag.Answer);
+        await Assert.That((int)bag.Answer).IsEqualTo(42);
     }
 
 
-    [Fact]
-    public void SideDataBag_Throws_WhenAttachedBagIsNotASideDataBag()
+    [Test]
+    public async Task SideDataBag_Throws_WhenAttachedBagIsNotASideDataBag()
     {
         var host = new object();
         SideDataAttachment.GetOrAdd(host, () => (dynamic)new ExpandoObject());
 
-        var ex = Assert.Throws<InvalidOperationException>(() => host.SideDataBag());
-        Assert.Contains(nameof(ExpandoObject), ex.Message);
+        var ex = await Assert.That(() => host.SideDataBag()).ThrowsExactly<InvalidOperationException>();
+        await Assert.That(ex!.Message).Contains(nameof(ExpandoObject));
     }
 
     #endregion
@@ -292,6 +293,6 @@ public class SideDataTests(TestDataFixture testDataFixture) : IClassFixture<Test
         GC.Collect();
     }
 
-    
+
     private TestDataFixture Fixture { get; } = testDataFixture;
 }
