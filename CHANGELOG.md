@@ -10,6 +10,15 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** `SideDataBag` no longer derives from `DynamicObject`. It implements `IDynamicMetaObjectProvider` directly, and its `TryGetMember`, `TrySetMember`, `TryDeleteMember`, `TryGetIndex`, `TrySetIndex` and `GetDynamicMemberNames` methods are no longer overrides.
+
+### Fixed
+
+- Publishing an app that uses SideData with Native AOT no longer reports `IL3053` for the SideData assembly.
+- Dynamic member and indexer access through `obj.SideData()` no longer throws `RuntimeBinderException` under Native AOT.
+
 ## [1.1.2] - 2026-11-01
 
 ### Changed

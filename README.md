@@ -127,6 +127,15 @@ Pass the flag at the first call site, or leave it off everywhere and dispose exp
 - Each bag serializes its operations internally; individual operations are thread-safe.
 - Compound operations are not atomic; if you need multi-step atomicity, use your own synchronization.
 
+## Native AOT
+
+The typed API (`obj.SideDataBag()` and `SideDataAttachment`) works under Native AOT and adds no AOT warnings of its own.
+
+Dynamic member and indexer access through `obj.SideData()` also worked in testing (linux-x64, .NET 10). Your own `dynamic` call sites still go through the C# runtime binder, which the SDK reports as unsupported on Native AOT, so expect IL2026 and IL3050 at those lines. Two forms failed in testing, so use the typed API for them:
+
+- Invoking a stored delegate, such as `bag.Callback()`.
+- Reading a real member of the bag, such as `bag.DisposeOnReplace`, through `dynamic`.
+
 ## API reference (quick overview)
 
 Extension methods:

@@ -31,7 +31,7 @@ SideData attaches arbitrary data to any .NET reference-type object using `Condit
 
 ### Two API layers (both in `SideData` namespace, single `using SideData;` import)
 
-1. **Dynamic API** — `obj.SideData()` returns a `dynamic` `SideDataBag` (which extends `DynamicObject`) for property-style access (`bag.Foo = 42`) and indexer access (`bag["key"] = value`).
+1. **Dynamic API** — `obj.SideData()` returns a `dynamic` `SideDataBag` (which implements `IDynamicMetaObjectProvider`) for property-style access (`bag.Foo = 42`) and indexer access (`bag["key"] = value`).
 
 2. **Strongly-typed API** — `obj.SideDataBag()` returns the same `SideDataBag` but as its concrete type, providing `TryGet<T>`, `GetOrDefault<T>`, `GetOrAdd<T>`, `Remove`, `Clear`, etc.
 
@@ -42,8 +42,8 @@ Asking for a bag with a `disposeOnReplace` that disagrees with the one already a
 ### Key implementation details
 
 - **`SideDataAttachment`** (`SideDataAttachment.cs`) — Static class holding the `ConditionalWeakTable<object, IDynamicMetaObjectProvider>`. Provides `Get`, `GetOrAdd`, `TryGet`, `Remove`. This is the low-level attachment point. The value type is `IDynamicMetaObjectProvider`, not `SideDataBag`, **deliberately**: a caller can attach their own dynamic object (an `ExpandoObject`, say) via `SideDataAttachment.GetOrAdd(host, () => (dynamic)expando)` and reach it through `obj.SideData()`. Do not "simplify" this to `SideDataBag`; it would delete a working feature. `obj.SideDataBag()` is the one path that cannot serve a custom bag, and it throws `InvalidOperationException` naming the attached type.
-- **`SideDataBag`** (`SideDataBag.cs`) — `DynamicObject` subclass that stores members in a dictionary. Implements `IDisposable`/`IAsyncDisposable`. Tracks owned disposable values and disposes them on bag disposal or host GC (via finalizer). Thread-safe via internal lock (`_gate`).
-- **`ReferenceEqualityComparer<T>`** (`Internals/`) — Backs the `_owned` and `_ownedAsync` `HashSet`s in `SideDataBag` (`SideDataBag.cs:503-504`), so a stored value is tracked by identity rather than by its own `Equals`. It is **not** used for the `ConditionalWeakTable`, which is reference-keyed inherently and takes no comparer. It exists because `System.Collections.Generic.ReferenceEqualityComparer` is .NET 5+ only and this library still targets `netstandard2.0`.
+- **`SideDataBag`** (`SideDataBag.cs`) — Stores members in a dictionary and implements `IDynamicMetaObjectProvider` directly through `Internals/BagMetaObject.cs`. It must **not** derive from `DynamicObject`: that constructor is marked `RequiresDynamicCode`, which makes every Native AOT publish report `IL3053` for this assembly. `BagMetaObject` follows `DynamicObject`'s order (a real member of the bag wins, then the bag's entries, and a stored delegate can be invoked as `bag.Name()`). Implements `IDisposable`/`IAsyncDisposable`. Tracks owned disposable values and disposes them on bag disposal or host GC (via finalizer). Thread-safe via internal lock (`_gate`).
+- **`ReferenceEqualityComparer<T>`** (`Internals/`) — Backs the `_owned` and `_ownedAsync` `HashSet`s in `SideDataBag` (`SideDataBag.cs:514-515`), so a stored value is tracked by identity rather than by its own `Equals`. It is **not** used for the `ConditionalWeakTable`, which is reference-keyed inherently and takes no comparer. It exists because `System.Collections.Generic.ReferenceEqualityComparer` is .NET 5+ only and this library still targets `netstandard2.0`.
 - **Ownership/disposal** — `SideDataBag` can optionally dispose replaced values (`disposeOnReplace: true`). It always disposes tracked `IDisposable`/`IAsyncDisposable` on `Dispose()`/`DisposeAsync()` or finalization.
 
 ### Gotchas worth knowing before you change anything

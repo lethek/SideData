@@ -1,9 +1,10 @@
 ﻿using System.Dynamic;
+using System.Linq.Expressions;
 using SideData.Internals;
 
 namespace SideData;
 
-public sealed class SideDataBag(bool disposeOnReplace = false) : DynamicObject, IDisposable, IAsyncDisposable
+public sealed class SideDataBag(bool disposeOnReplace = false) : IDynamicMetaObjectProvider, IDisposable, IAsyncDisposable
 {
     /// <summary>
     /// Gets a value indicating whether replaced values are automatically disposed when overwritten.
@@ -11,16 +12,26 @@ public sealed class SideDataBag(bool disposeOnReplace = false) : DynamicObject, 
     public bool DisposeOnReplace { get; } = disposeOnReplace;
 
 
-    public override bool TryGetMember(GetMemberBinder binder, out object? result)
+    // Implemented here instead of deriving from DynamicObject, whose constructor requires dynamic code and so breaks Native AOT analysis
+    DynamicMetaObject IDynamicMetaObjectProvider.GetMetaObject(Expression parameter)
+        => new BagMetaObject(parameter, this);
+
+
+    public bool TryGetMember(GetMemberBinder binder, out object? result)
+        => TryGetMember(binder.Name, out result);
+
+
+    // By name so that invoking a stored delegate does not need a GetMemberBinder, whose constructor requires dynamic code
+    internal bool TryGetMember(string name, out object? result)
     {
         lock (_gate) {
             ThrowIfDisposed();
-            return _members.TryGetValue(binder.Name, out result!);
+            return _members.TryGetValue(name, out result!);
         }
     }
 
 
-    public override bool TrySetMember(SetMemberBinder binder, object? value)
+    public bool TrySetMember(SetMemberBinder binder, object? value)
     {
         lock (_gate) {
             ThrowIfDisposed();
@@ -40,7 +51,7 @@ public sealed class SideDataBag(bool disposeOnReplace = false) : DynamicObject, 
     /// Attempts to delete a member from the bag.
     /// When a member is deleted, it uses the bag's <see cref="DisposeOnReplace"/> setting to determine whether to dispose the removed value.
     /// </summary>
-    public override bool TryDeleteMember(DeleteMemberBinder binder)
+    public bool TryDeleteMember(DeleteMemberBinder binder)
     {
         lock (_gate) {
             ThrowIfDisposed();
@@ -56,7 +67,7 @@ public sealed class SideDataBag(bool disposeOnReplace = false) : DynamicObject, 
     }
 
 
-    public override bool TryGetIndex(GetIndexBinder binder, object[] indexes, out object? result)
+    public bool TryGetIndex(GetIndexBinder binder, object[] indexes, out object? result)
     {
         lock (_gate) {
             ThrowIfDisposed();
@@ -72,7 +83,7 @@ public sealed class SideDataBag(bool disposeOnReplace = false) : DynamicObject, 
     }
 
 
-    public override bool TrySetIndex(SetIndexBinder binder, object[] indexes, object? value)
+    public bool TrySetIndex(SetIndexBinder binder, object[] indexes, object? value)
     {
         lock (_gate) {
             ThrowIfDisposed();
@@ -93,7 +104,7 @@ public sealed class SideDataBag(bool disposeOnReplace = false) : DynamicObject, 
     }
 
 
-    public override IEnumerable<string> GetDynamicMemberNames()
+    public IEnumerable<string> GetDynamicMemberNames()
     {
         lock (_gate) {
             ThrowIfDisposed();
