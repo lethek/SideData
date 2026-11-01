@@ -10,6 +10,10 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+### Fixed
+
+- `obj.SideDataBag()` and `SideDataAttachment.GetOrAdd` no longer throw on first use under Native AOT.
+
 ## [1.1.1] - 2026-09-02
 
 ### Changed

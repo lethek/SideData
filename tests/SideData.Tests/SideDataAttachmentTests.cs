@@ -100,6 +100,26 @@ public class SideDataAttachmentTests
 
 
     [Test]
+    public async Task GetOrAdd_Throws_When_Factory_Result_Is_Not_A_Dynamic_Object()
+    {
+        var host = new object();
+
+        await Assert.That(() => { SideDataAttachment.GetOrAdd(host, () => new object()); }).ThrowsExactly<InvalidCastException>();
+        await Assert.That(SideDataAttachment.TryGet(host, out dynamic _)).IsFalse();
+    }
+
+
+    [Test]
+    [Property("Category", "Internals")]
+    public async Task Library_Does_Not_Reference_The_Dynamic_Runtime_Binder()
+    {
+        // Any dynamic operation in the library compiles to a Microsoft.CSharp call site, which Native AOT cannot run
+        var referenced = typeof(SideDataAttachment).Assembly.GetReferencedAssemblies().Select(a => a.Name).ToArray();
+        await Assert.That(referenced).DoesNotContain("Microsoft.CSharp");
+    }
+
+
+    [Test]
     public async Task Parallel_GetOrAdd_Is_Idempotent_Per_Host()
     {
         var host = new object();
