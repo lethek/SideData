@@ -100,6 +100,29 @@ public class SideDataAttachmentTests
 
 
     [Test]
+    public async Task Existing_Bag_Is_Returned_Without_Allocating()
+    {
+        var host = new object();
+        SideDataAttachment.GetOrAdd(host);
+
+        // Warm up so JIT work is not counted
+        for (var i = 0; i < 100; i++) {
+            SideDataAttachment.GetOrAdd(host);
+            host.SideDataBag();
+        }
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < 1000; i++) {
+            SideDataAttachment.GetOrAdd(host);
+            host.SideDataBag();
+        }
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        await Assert.That(allocated).IsEqualTo(0L);
+    }
+
+
+    [Test]
     public async Task GetOrAdd_Throws_When_Factory_Result_Is_Not_A_Dynamic_Object()
     {
         var host = new object();
