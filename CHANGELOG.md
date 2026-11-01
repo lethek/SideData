@@ -10,6 +10,10 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+### Changed
+
+- `obj.SideData()`, `obj.SideDataBag()` and `SideDataAttachment.GetOrAdd` no longer allocate when the host already has a bag.
+
 ### Fixed
 
 - `obj.SideDataBag()` and `SideDataAttachment.GetOrAdd` no longer throw on first use under Native AOT.

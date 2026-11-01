@@ -45,6 +45,13 @@ public static class SideDataAttachment
     /// The existing or newly created dynamic side-data bag associated with <paramref name="hostObject"/>.
     /// </returns>
     public static dynamic GetOrAdd(object hostObject, Func<dynamic>? newValue = null)
+        => AttachedData.TryGetValue(hostObject, out var existing)
+            ? existing
+            : AddNew(hostObject, newValue);
+
+
+    // Kept out of GetOrAdd so the closure over newValue is only allocated when a bag has to be created
+    private static IDynamicMetaObjectProvider AddNew(object hostObject, Func<dynamic>? newValue)
         // Cast to object first: a dynamic ?? or implicit conversion here compiles to a DLR call site, which Native AOT cannot run
         => AttachedData.GetValue(hostObject, _ => (IDynamicMetaObjectProvider)((object?)newValue?.Invoke() ?? new SideDataBag()));
 
