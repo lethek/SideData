@@ -10,6 +10,15 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+### Changed
+
+- `obj.SideData()` is marked `RequiresDynamicCode` on `net8.0`, so calling it from a Native AOT app reports `IL3050`.
+- The `net8.0` assembly is marked trimmable and AOT compatible (`IsAotCompatible`).
+
+### Fixed
+
+- Publishing an app that uses SideData with Native AOT no longer reports `IL3053` for the SideData assembly.
+
 ## [1.1.2] - 2026-11-01
 
 ### Changed

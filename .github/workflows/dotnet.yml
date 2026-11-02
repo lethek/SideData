@@ -107,17 +107,66 @@ jobs:
           ${{ github.workspace }}/artifacts/*.nupkg
           ${{ github.workspace }}/artifacts/*.snupkg
 
+  # Runs the unit tests as a trimmed app and as a Native AOT app. The dynamic API and the reflection
+  # tests cannot run there, so they are filtered out by category. Nothing here builds or publishes the package.
+  trim-aot-tests:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [ trim, aot ]
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v7
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: |
+          8.x
+          10.x
+
+    - name: Publish tests (${{ matrix.mode }})
+      run: dotnet publish tests/SideData.Tests -f net10.0 -c ${{ env.buildConfiguration }} -r linux-x64 -p:Mode=${{ matrix.mode }} -o ${{ github.workspace }}/out
+
+    - name: Run tests (${{ matrix.mode }})
+      run: ${{ github.workspace }}/out/SideData.Tests --treenode-filter "/*/*/*/*[(Category!=Dynamic)&(Category!=Reflection)]"
+
+  # Pushes the package built above. It only runs for pushes, and only after the build and both the trimmed
+  # and AOT test runs have passed, so a failing run can never publish.
+  publish:
+    needs: [ build, trim-aot-tests ]
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+
+    env:
+      NUGET_USER: ${{ secrets.NUGET_USER }}
+
+    steps:
+    - name: Download package
+      uses: actions/download-artifact@v8
+      with:
+        name: nuget
+        path: ${{ github.workspace }}/artifacts
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: 10.x
+
     # Trusted Publishing: exchanges a GitHub OIDC token for an API key that is valid for 1 hour,
     # so this must run immediately before the push rather than earlier in the job.
     - name: NuGet login (OIDC)
       id: nuget-login
-      if: ${{ env.publishEnabled == 'true' && github.event_name == 'push' && env.NUGET_USER != '' }}
+      if: ${{ env.publishEnabled == 'true' && env.NUGET_USER != '' }}
       uses: NuGet/login@v1
       with:
         user: ${{ env.NUGET_USER }}
 
     - name: Push (Release)
-      if: ${{ env.publishEnabled == 'true' && github.event_name == 'push' && env.NUGET_USER != '' }}
+      if: ${{ env.publishEnabled == 'true' && env.NUGET_USER != '' }}
       env:
         NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
       run: dotnet nuget push "${{ github.workspace }}/artifacts/"*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
