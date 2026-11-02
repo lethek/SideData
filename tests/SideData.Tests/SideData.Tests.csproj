@@ -13,6 +13,17 @@
         <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
     </PropertyGroup>
 
+    <!-- Publish the tests trimmed or as Native AOT to run them there: dotnet publish -f net10.0 -r linux-x64 -p:Mode=trim|aot -->
+    <PropertyGroup Condition="'$(Mode)' == 'trim'">
+        <PublishTrimmed>true</PublishTrimmed>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Mode)' == 'aot'">
+        <PublishAot>true</PublishAot>
+    </PropertyGroup>
+    <ItemGroup Condition="'$(Mode)' == 'trim'">
+        <TrimmerRootAssembly Include="SideData.Tests"/>
+    </ItemGroup>
+
     <ItemGroup>
         <PackageReference Include="TUnit" Version="1.65.31"/>
         <PackageReference Include="Bogus" Version="35.6.5"/>

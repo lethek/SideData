@@ -981,12 +981,63 @@ public class SideDataBagTests(TestDataFixture testDataFixture)
     #endregion
 
 
+    #region Finalizer Tests
+
+    [Test]
+    [Property("Category", "Disposal")]
+    public async Task Finalizer_DisposesTrackedMembers_WhenHostIsCollected()
+    {
+        var sync = new TestDisposable();
+        var async = new TestAsyncDisposable();
+        WeakReference hostRef;
+
+        CreateHostAndAttach(out hostRef, sync, async);
+
+        // Ensure host is collected
+        ForceFullGc();
+        await Assert.That(hostRef.IsAlive).IsFalse();
+
+        // Give finalizers a chance to run and Dispose the bag-owned members
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (!(sync.Disposed && async.Disposed) && DateTime.UtcNow < deadline) {
+            ForceFullGc();
+            Thread.Sleep(10);
+        }
+
+        await Assert.That(sync.Disposed).IsTrue();
+        await Assert.That(async.Disposed).IsTrue();
+    }
+
+    private static void CreateHostAndAttach(out WeakReference hostRef, TestDisposable sync, TestAsyncDisposable async)
+    {
+        var host = new object();
+        hostRef = new WeakReference(host);
+
+        var bag = host.SideDataBag();
+        bag["Sync"] = sync;
+        bag["Async"] = async;
+
+        // Drop the only strong reference to host (outside ConditionalWeakTable)
+        GC.KeepAlive(bag);
+    }
+
+    private static void ForceFullGc()
+    {
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+    }
+
+    #endregion
+
+
     #region Dynamic Binding Tests
 
     // The C# binder has no syntax for deleting a member and routes string keys to the real indexer,
     // so these paths are only reachable through a call site the way another DLR language would use it
 
     [Test]
+    [Property("Category", "Dynamic")]
     public async Task Delete_Member_Removes_The_Entry_And_Rejects_A_Missing_One()
     {
         var bag = new SideDataBag();
@@ -998,6 +1049,7 @@ public class SideDataBagTests(TestDataFixture testDataFixture)
     }
 
     [Test]
+    [Property("Category", "Dynamic")]
     public async Task Index_Binders_Read_And_Write_Entries_And_Reject_A_Missing_Key()
     {
         var bag = new SideDataBag();

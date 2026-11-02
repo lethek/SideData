@@ -57,11 +57,11 @@ public class SideDataAttachmentTests
     public async Task Remove_Detaches_And_Disposes_Bag()
     {
         var host = new object();
-        dynamic bag = SideDataAttachment.GetOrAdd(host);
+        var bag = (SideDataBag)(object)SideDataAttachment.GetOrAdd(host);
 
         // Put a disposable inside the bag to verify disposal via SideDataAttachment.Remove
         var d = new TestDisposable();
-        bag.D = d;
+        bag["D"] = d;
 
         // Remove should dispose the bag (which disposes tracked members) and detach it
         SideDataAttachment.Remove(host);
@@ -134,6 +134,7 @@ public class SideDataAttachmentTests
 
     [Test]
     [Property("Category", "Internals")]
+    [Property("Category", "Reflection")]
     public async Task Library_Does_Not_Reference_The_Dynamic_Runtime_Binder()
     {
         // Any dynamic operation in the library compiles to a Microsoft.CSharp call site, which Native AOT cannot run

@@ -19,9 +19,18 @@ dotnet pack -c Release                                          # Create NuGet p
 - **Method:** `/*/*/*/MethodName`
 - **Namespace:** `/*/SideData/*/*`
 - **Category:** `/*/*/*/*[Category=Disposal]`, negated with `[Category!=Disposal]`
-- **Combining:** `|` for OR, adjacent `[...][...]` brackets for AND
+- **Combining:** `|` for OR, and `&` inside one bracket for AND, such as `[(Category!=Dynamic)&(Category!=Reflection)]`. Two adjacent negated brackets matched nothing when tried.
 
-Categories come from `[Property("Category", "...")]` on the test method. The ones in use are `Disposal`, `TypedAccessors`, `ThreadSafety`, `Clear` and `Internals`.
+Categories come from `[Property("Category", "...")]` on the test method or class. A test can carry several. The ones in use are `Disposal`, `TypedAccessors`, `ThreadSafety`, `Clear`, `Internals`, `Dynamic` and `Reflection`.
+
+**Trimmed and Native AOT test runs.** The tests also run as a trimmed app and as a Native AOT app, which is what the `trim-aot-tests` CI job does:
+
+```bash
+dotnet publish tests/SideData.Tests -f net10.0 -r linux-x64 -p:Mode=aot -o out   # or -p:Mode=trim
+./out/SideData.Tests --treenode-filter "/*/*/*/*[(Category!=Dynamic)&(Category!=Reflection)]"
+```
+
+Tests tagged `Dynamic` use the `dynamic` API or a DLR call site, and `Reflection` ones use reflection the trimmer removes, so neither can run there and the filter excludes them. A new test that uses `dynamic` needs the `Dynamic` category, or its typed behaviour needs a typed test as well. Setting up a typed behaviour through `dynamic` hides it from these runs.
 
 Tests use **TUnit 1.65.31** and target `net10.0` and `net8.0`. The library multi-targets `net8.0`, `netstandard2.1`, and `netstandard2.0`.
 

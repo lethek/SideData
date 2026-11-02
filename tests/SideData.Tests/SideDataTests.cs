@@ -6,6 +6,7 @@ using SideData.TestData;
 namespace SideData;
 
 [ClassDataSource<TestDataFixture>(Shared = SharedType.PerClass)]
+[Property("Category", "Dynamic")]
 public class SideDataTests(TestDataFixture testDataFixture)
 {
     [Test]
