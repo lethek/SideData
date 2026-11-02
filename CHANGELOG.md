@@ -10,6 +10,10 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+### Changed
+
+- Raised the `Microsoft.Bcl.AsyncInterfaces` dependency from 10.0.8 to 10.0.14.
+
 ## [1.1.3] - 2026-11-02
 
 ### Changed
