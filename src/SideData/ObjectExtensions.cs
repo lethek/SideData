@@ -31,6 +31,7 @@ public static class ObjectExtensions
     /// Represents a dynamic bag that can be attached to any object via <see cref="ObjectExtensions.SideData{T}(T, bool)"/>.
     /// The bag allows storage of arbitrary properties at runtime using dynamic member access or indexer syntax.
     /// </summary>
+    /// <param name="obj">The instance to which the side data will be attached.</param>
     /// <param name="disposeOnReplace">
     /// If <c>true</c>, any existing value that is replaced by a new assignment will be disposed when the replacement occurs.
     /// This ensures that disposable side-data does not leak resources.
@@ -62,6 +63,6 @@ public static class ObjectExtensions
 
 
     // Cached so the common path does not allocate a closure on every call
-    private static readonly Func<dynamic> CreateDefault = () => new SideDataBag(false);
-    private static readonly Func<dynamic> CreateDisposing = () => new SideDataBag(true);
+    private static readonly Func<dynamic> CreateDefault = () => new SideDataBag(disposeOnReplace: false);
+    private static readonly Func<dynamic> CreateDisposing = () => new SideDataBag(disposeOnReplace: true);
 }
