@@ -10,6 +10,8 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-11-02
+
 ### Changed
 
 - `obj.SideData()` is marked `RequiresDynamicCode` on `net8.0`, so calling it from a Native AOT app reports `IL3050`.
@@ -74,7 +76,8 @@ release rather than record it as it happened.
 - `SideData.LowLevel.TypedSideData<T>`, keying attached values by type, with `Set`, `Add`, `TryAdd`, `Remove`, `Get`, `GetOrDefault`, `GetOrAdd` and `TryGet`.
 - Targets `netstandard2.0`, `netstandard2.1` and `net7.0`.
 
-[Unreleased]: https://github.com/lethek/SideData/compare/v1.1.2...HEAD
+[Unreleased]: https://github.com/lethek/SideData/compare/v1.1.3...HEAD
+[1.1.3]: https://github.com/lethek/SideData/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/lethek/SideData/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/lethek/SideData/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/lethek/SideData/compare/v1.0.0...v1.1.0
