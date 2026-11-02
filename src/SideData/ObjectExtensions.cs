@@ -20,6 +20,9 @@ public static class ObjectExtensions
     /// <exception cref="InvalidOperationException">
     /// Thrown when a side-data bag already exists for <paramref name="obj"/> but with a different <paramref name="disposeOnReplace"/> setting.
     /// </exception>
+#if NET8_0_OR_GREATER
+    [System.Diagnostics.CodeAnalysis.RequiresDynamicCode("Members of the returned dynamic object are bound at runtime, which Native AOT does not support. Use SideDataBag() instead.")]
+#endif
     public static dynamic SideData<T>(this T obj, bool disposeOnReplace = false) where T : class
         => GetOrAttach(obj, disposeOnReplace);
 

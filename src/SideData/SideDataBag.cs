@@ -3,6 +3,9 @@ using SideData.Internals;
 
 namespace SideData;
 
+#if NET8_0_OR_GREATER
+[System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("AOT", "IL3050", Justification = "Only deriving from DynamicObject; dynamic member access is the consumer's call site.")]
+#endif
 public sealed class SideDataBag(bool disposeOnReplace = false) : DynamicObject, IDisposable, IAsyncDisposable
 {
     /// <summary>

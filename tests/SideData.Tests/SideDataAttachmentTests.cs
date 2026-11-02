@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using SideData.TestData;
 
@@ -139,6 +140,19 @@ public class SideDataAttachmentTests
         // Any dynamic operation in the library compiles to a Microsoft.CSharp call site, which Native AOT cannot run
         var referenced = typeof(SideDataAttachment).Assembly.GetReferencedAssemblies().Select(a => a.Name).ToArray();
         await Assert.That(referenced).DoesNotContain("Microsoft.CSharp");
+    }
+
+
+    [Test]
+    [Property("Category", "Internals")]
+    public async Task Only_The_Dynamic_Entry_Point_Requires_Dynamic_Code()
+    {
+        // Native AOT apps using the typed API must see no warning, and apps using the dynamic API must see one
+        var dynamicEntry = typeof(ObjectExtensions).GetMethod(nameof(ObjectExtensions.SideData))!;
+        var typedEntry = typeof(ObjectExtensions).GetMethod(nameof(ObjectExtensions.SideDataBag))!;
+
+        await Assert.That(dynamicEntry.IsDefined(typeof(RequiresDynamicCodeAttribute), inherit: false)).IsTrue();
+        await Assert.That(typedEntry.IsDefined(typeof(RequiresDynamicCodeAttribute), inherit: false)).IsFalse();
     }
 
 
